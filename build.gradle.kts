@@ -1,0 +1,41 @@
+allprojects {
+    group = "net.echonolix"
+    version = "1.0-SNAPSHOT"
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+    kotlin("jvm")
+}
+
+val lwjglVersion = "3.3.6"
+val lwjglNatives = "natives-windows"
+
+dependencies {
+    implementation(platform("org.lwjgl:lwjgl-bom:$lwjglVersion"))
+    implementation("org.lwjgl", "lwjgl", lwjglVersion)
+    implementation("org.lwjgl", "lwjgl-glfw", lwjglVersion)
+    implementation("org.lwjgl", "lwjgl-shaderc", lwjglVersion)
+    runtimeOnly("org.lwjgl", "lwjgl", classifier = lwjglNatives)
+    runtimeOnly("org.lwjgl", "lwjgl-glfw", classifier = lwjglNatives)
+    runtimeOnly("org.lwjgl", "lwjgl-shaderc", classifier = lwjglNatives)
+
+    implementation("net.echonolix:caelum-core")
+    implementation("net.echonolix:caelum-vulkan")
+}
+
+afterEvaluate {
+    println(configurations.runtimeClasspath.get().files)
+}
+
+allprojects {
+    kotlin {
+        compilerOptions {
+            optIn.add("kotlin.contracts.ExperimentalContracts")
+            freeCompilerArgs.addAll("-Xbackend-threads=0", "-Xcontext-parameters")
+        }
+    }
+}
