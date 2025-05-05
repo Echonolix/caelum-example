@@ -4,6 +4,4 @@ pluginManagement {
     }
 }
 
-includeBuild("../caelum")
-
 rootProject.name = "vktest"

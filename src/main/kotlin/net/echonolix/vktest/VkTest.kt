@@ -1,6 +1,11 @@
 package net.echonolix.vktest
 
 import net.echonolix.caelum.*
+import net.echonolix.caelum.glfw.consts.GLFW_CLIENT_API
+import net.echonolix.caelum.glfw.consts.GLFW_FALSE
+import net.echonolix.caelum.glfw.consts.GLFW_NO_API
+import net.echonolix.caelum.glfw.consts.GLFW_RESIZABLE
+import net.echonolix.caelum.glfw.functions.*
 import net.echonolix.caelum.vulkan.*
 import net.echonolix.caelum.vulkan.enums.*
 import net.echonolix.caelum.vulkan.flags.*
@@ -9,15 +14,19 @@ import net.echonolix.caelum.vulkan.structs.*
 import net.echonolix.caelum.vulkan.unions.VkClearValue
 import net.echonolix.caelum.vulkan.unions.color
 import net.echonolix.caelum.vulkan.unions.float32
-import org.lwjgl.glfw.GLFW.*
-import org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions
-import org.lwjgl.glfw.GLFWVulkan.nglfwCreateWindowSurface
-import org.lwjgl.system.MemoryStack as LwjglMemoryStack
-import org.lwjgl.system.MemoryUtil
 import org.lwjgl.util.shaderc.Shaderc
+import kotlin.io.path.Path
+import kotlin.io.path.absolutePathString
+import org.lwjgl.system.MemoryStack as LwjglMemoryStack
 
 @OptIn(UnsafeAPI::class)
 fun main() {
+    fun loadLibrary(name: String) {
+        System.load(Path("$name.dll").absolutePathString())
+    }
+
+    loadLibrary("glfw3")
+
     MemoryStack {
         // region Init GLFW
         glfwInit()
@@ -25,13 +34,16 @@ fun main() {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE)
         val width = 800
         val height = 600
-        val window = glfwCreateWindow(width, height, "Vulkan", 0, 0)
+        val window = glfwCreateWindow(width, height, "Vulkan".c_str(), nullptr(), nullptr())
         // endregion
 
         val layers = setOf("VK_LAYER_KHRONOS_validation")
         val extensions = buildSet {
-            val buffer = glfwGetRequiredInstanceExtensions() ?: return@buildSet
-            repeat(buffer.capacity()) { add(MemoryUtil.memASCII(buffer.get(it))) }
+            val count = NativeUInt32.malloc()
+            val buffer = glfwGetRequiredInstanceExtensions(count.ptr())
+            repeat(count.value.toInt()) {
+                add(buffer[it].string)
+            }
         } + setOf(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
         println(extensions)
 
@@ -100,17 +112,7 @@ fun main() {
 
         println("Using physical device ${physicalDeviceProperties.deviceName.string}")
 
-        val surfaceHandle = NativeInt64.malloc()
-        check(
-            nglfwCreateWindowSurface(
-                instance.handle,
-                window,
-                0L,
-                surfaceHandle.ptr()._address
-            ) == VkResult.VK_SUCCESS.value
-        )
-        val surface = VkSurfaceKHR.fromNativeData(instance, surfaceHandle.value)
-
+        val surface = glfwCreateWindowSurface(instance, window, null).getOrThrow()
         var graphicsQueueFamilyIndex = -1
         var presentQueueFamilyIndex = -1
         MemoryStack {
@@ -214,14 +216,14 @@ fun main() {
         fun chooseSwapchainExtent(capabilities: NativeValue<VkSurfaceCapabilitiesKHR>): NativePointer<VkExtent2D> {
             return if (capabilities.currentExtent.width != UInt.MAX_VALUE) capabilities.currentExtent
             else {
-                val widthBuffer = IntArray(1)
-                val heightBuffer = IntArray(1)
-                glfwGetFramebufferSize(window, widthBuffer, heightBuffer)
+                val widthBuffer = NativeInt.malloc()
+                val heightBuffer = NativeInt.calloc()
+                glfwGetWindowSize(window, widthBuffer.ptr(), heightBuffer.ptr())
 
                 val actualExtent = VkExtent2D.allocate().apply {
-                    this.width = widthBuffer[0].toUInt()
+                    this.width = widthBuffer.value.toUInt()
                         .coerceIn(capabilities.minImageExtent.width, capabilities.maxImageExtent.width)
-                    this.height = heightBuffer[0].toUInt()
+                    this.height = heightBuffer.value.toUInt()
                         .coerceIn(capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
                 }
 
@@ -628,7 +630,7 @@ fun main() {
             color.float32[3] = 1f
         }
 
-        while (!glfwWindowShouldClose(window)) {
+        while (glfwWindowShouldClose(window) == GLFW_FALSE) {
             glfwPollEvents()
             MemoryStack {
                 device.waitForFences(1u, fences.ptr(), VK_TRUE, ULong.MAX_VALUE)
