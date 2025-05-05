@@ -206,7 +206,7 @@ fun main() {
         }
 
         fun chooseSwapchainFormat(formats: List<NativePointer<VkSurfaceFormatKHR>>) = formats.find {
-            it.format == VkFormat.R8G8B8A8_SRGB && it.colorSpace == VkColorSpaceKHR.SRGB_NONLINEAR_KHR
+            it.format == VkFormat.R8G8B8A8_UNORM
         }
 
         fun choosePresentMode(modes: List<VkPresentModeKHR>) = modes.find {
@@ -231,7 +231,13 @@ fun main() {
             }
         }
 
+
         val swapchainSupport = physicalDevice.querySwapchainSupport()
+        println("Swapchain Formats:")
+        swapchainSupport.formats.forEach {
+            println("${it.format}\t${it.colorSpace}")
+        }
+
         val surfaceFormat = chooseSwapchainFormat(swapchainSupport.formats)!!
         val presentMode = choosePresentMode(swapchainSupport.presentModes)
         val swapchainExtent = chooseSwapchainExtent(swapchainSupport.capabilities)
