@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="VkTestKt" type="JetRunConfigurationType">
+        <option name="MAIN_CLASS_NAME" value="net.echonolix.vktest.VkTestKt"/>
+        <module name="vktest.test"/>
+        <shortenClasspath name="NONE"/>
+        <option name="WORKING_DIRECTORY" value="run"/>
+        <method v="2">
+            <option name="Make" enabled="true"/>
+        </method>
+    </configuration>
+</component>

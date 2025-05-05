@@ -125,9 +125,7 @@ fun main() {
             )
             repeat(queueFamilyPropertyCount.value.toInt()) {
                 val queueFamilyProperty = queueFamilyProperties[it.toLong()]
-                if (queueFamilyProperty.queueFlags.contains(VkQueueFlags.GRAPHICS)
-                    && graphicsQueueFamilyIndex == -1
-                ) {
+                if (graphicsQueueFamilyIndex == -1 && queueFamilyProperty.queueFlags.contains(VkQueueFlags.GRAPHICS)) {
                     graphicsQueueFamilyIndex = it
                 } else {
                     val isPresentSupported = NativeUInt32.malloc()
@@ -681,12 +679,10 @@ fun main() {
                 val waitStages = VkPipelineStageFlags.malloc(1).apply {
                     this[0] = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
                 }
-                val waitSemaphores = reinterpretCast<VkSemaphore>(NativeInt64.malloc().apply {
-                    value = imageAvailableSemaphore.handle
-                })
-                val signalSemaphores = reinterpretCast<VkSemaphore>(NativeInt64.malloc().apply {
-                    value = renderFinishedSemaphore.handle
-                })
+                val waitSemaphores = VkSemaphore.malloc()
+                val signalSemaphores = VkSemaphore.malloc()
+                waitSemaphores.set(imageAvailableSemaphore)
+                signalSemaphores.set(renderFinishedSemaphore)
                 val submitInfo = VkSubmitInfo.allocate().apply {
                     waitSemaphoreCount = 1u
                     pWaitSemaphores = waitSemaphores.ptr()
