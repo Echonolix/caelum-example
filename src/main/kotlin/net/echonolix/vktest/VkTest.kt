@@ -165,10 +165,12 @@ fun main() {
             ppEnabledLayerNames = layers.c_strs()
         }
         val device = physicalDevice.createDevice(deviceCreateInfo.ptr(), null).getOrThrow()
-        val graphicsQueue = VkQueue.malloc()
-        val presentQueue = VkQueue.malloc()
-        device.getDeviceQueue(graphicsQueueFamilyIndex.toUInt(), 0u, graphicsQueue.ptr())
-        device.getDeviceQueue(presentQueueFamilyIndex.toUInt(), 0u, presentQueue.ptr())
+        val graphicsQueueV = VkQueue.malloc()
+        val presentQueueV = VkQueue.malloc()
+        device.getDeviceQueue(graphicsQueueFamilyIndex.toUInt(), 0u, graphicsQueueV.ptr())
+        device.getDeviceQueue(presentQueueFamilyIndex.toUInt(), 0u, presentQueueV.ptr())
+        val graphicsQueue = VkQueue.fromNativeData(device, graphicsQueueV.value)
+        val presentQueue = VkQueue.fromNativeData(device, presentQueueV.value)
 
         data class SwapchainSupportDetails(
             val capabilities: NativeValue<VkSurfaceCapabilitiesKHR>,
@@ -584,12 +586,12 @@ fun main() {
 
         val swapchainFramebuffers = buildList {
             repeat(swapchainImageViews.size) {
-                val attachments = NativeInt64.malloc()
-                attachments.value = swapchainImageViews[it].handle
+                val attachments = VkImageView.malloc()
+                attachments.set(swapchainImageViews[it])
                 val framebufferCreateInfo = VkFramebufferCreateInfo.allocate().apply {
                     this.renderPass = renderPass
                     attachmentCount = 1u
-                    pAttachments = reinterpretCast(attachments.ptr())
+                    pAttachments = attachments.ptr()
                     this.width = swapchainExtent.width
                     this.height = swapchainExtent.height
                     this.layers = 1u
@@ -623,9 +625,8 @@ fun main() {
         val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
         val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
         val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
-        val fences = reinterpretCast<VkFence>(NativeInt64.malloc().apply {
-            value = inFlightFence.handle
-        })
+        val fences = VkFence.malloc()
+        fences.set(inFlightFence)
 
         val clearColor = VkClearValue.malloc().apply {
             color.float32[0] = 0f
@@ -696,15 +697,14 @@ fun main() {
                     pSignalSemaphores = signalSemaphores.ptr()
                 }
                 device.vkQueueSubmit(
-                    VkQueue.fromNativeData(device, graphicsQueue.value),
+                    graphicsQueue,
                     1u,
                     submitInfo.ptr(),
                     inFlightFence
                 )
 
-                val swapchains = reinterpretCast<VkSwapchainKHR>(NativeInt64.malloc().apply {
-                    value = swapchain.handle
-                })
+                val swapchains = VkSwapchainKHR.malloc()
+                swapchains.set(swapchain)
                 val presentInfo = VkPresentInfoKHR.allocate().apply {
                     waitSemaphoreCount = 1u
                     pWaitSemaphores = signalSemaphores.ptr()
@@ -714,7 +714,10 @@ fun main() {
 
                     pImageIndices = pImageIndex.ptr()
                 }
-                device.vkQueuePresentKHR(VkQueue.fromNativeData(device, presentQueue.value), presentInfo.ptr())
+                device.vkQueuePresentKHR(
+                    presentQueue,
+                    presentInfo.ptr()
+                )
             }
         }
         device.deviceWaitIdle()
