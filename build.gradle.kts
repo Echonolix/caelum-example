@@ -27,10 +27,6 @@ dependencies {
     implementation("net.echonolix:caelum-vulkan")
 }
 
-afterEvaluate {
-    println(configurations.runtimeClasspath.get().files)
-}
-
 allprojects {
     kotlin {
         compilerOptions {
