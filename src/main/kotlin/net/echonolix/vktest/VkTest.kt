@@ -38,7 +38,13 @@ fun main() {
         val window = glfwCreateWindow(width, height, "Vulkan".c_str(), nullptr(), nullptr())
         // endregion
 
-        val layers = setOf("VK_LAYER_KHRONOS_validation")
+        val useValidationLayer = false
+
+        val layers = if (useValidationLayer) {
+            setOf("VK_LAYER_KHRONOS_validation")
+        } else {
+            emptySet()
+        }
         val extensions = buildSet {
             val count = NativeUInt32.malloc()
             val buffer = glfwGetRequiredInstanceExtensions(count.ptr())
@@ -84,11 +90,19 @@ fun main() {
             enabledExtensionCount = extensions.size.toUInt()
             ppEnabledLayerNames = layers.c_strs()
             enabledLayerCount = layers.size.toUInt()
-            pNext = debugCreateInfo.ptr()
+            pNext = if (useValidationLayer) {
+                debugCreateInfo.ptr()
+            } else {
+                nullptr()
+            }
         }
 
         val instance = Vk.createInstance(createInfo.ptr(), null).getOrThrow()
-        val debugUtilsMessenger = instance.createDebugUtilsMessengerEXT(debugCreateInfo.ptr(), null).getOrThrow()
+        val debugUtilsMessenger = if (useValidationLayer) {
+            instance.createDebugUtilsMessengerEXT(debugCreateInfo.ptr(), null).getOrThrow()
+        } else {
+            null
+        }
 
         var physicalDeviceHandle = -1L
         MemoryStack {
@@ -171,7 +185,7 @@ fun main() {
         device.getDeviceQueue(graphicsQueueFamilyIndex.toUInt(), 0u, graphicsQueueV.ptr())
         device.getDeviceQueue(presentQueueFamilyIndex.toUInt(), 0u, presentQueueV.ptr())
         val graphicsQueue = VkQueue.fromNativeData(device, graphicsQueueV.value)
-        val presentQueue = VkQueue.fromNativeData(device, presentQueueV.value)
+        VkQueue.fromNativeData(device, presentQueueV.value)
 
         data class SwapchainSupportDetails(
             val capabilities: NativeValue<VkSurfaceCapabilitiesKHR>,
@@ -234,13 +248,21 @@ fun main() {
 
 
         val swapchainSupport = physicalDevice.querySwapchainSupport()
-        println("Swapchain Formats:")
+        println("Supported swapchain Formats:")
         swapchainSupport.formats.forEach {
             println("${it.format}\t${it.colorSpace}")
         }
+        println()
+        println("Supported swapchain Present Modes:")
+        swapchainSupport.presentModes.forEach {
+            println(it)
+        }
+        println()
 
         val surfaceFormat = chooseSwapchainFormat(swapchainSupport.formats)!!
+        println("Using swapchain format: ${surfaceFormat.format} ${surfaceFormat.colorSpace}")
         val presentMode = choosePresentMode(swapchainSupport.presentModes)
+        println("Using swapchain present mode: $presentMode")
         val swapchainExtent = chooseSwapchainExtent(swapchainSupport.capabilities)
 
         val swapchainCreateInfo = VkSwapchainCreateInfoKHR.allocate().apply {
@@ -503,21 +525,11 @@ fun main() {
             level = VkCommandBufferLevel.PRIMARY
             commandBufferCount = 1u
         }
-
-        val pCommandBuffer = VkCommandBuffer.malloc()
-        device.allocateCommandBuffers(commandBufferAllocateInfo.ptr(), pCommandBuffer.ptr())
-        val commandBuffer = VkCommandBuffer.fromNativeData(commandPool, pCommandBuffer.value)
-
         val semaphoreCreateInfo = VkSemaphoreCreateInfo.allocate().apply {}
+
         val fenceCreateInfo = VkFenceCreateInfo.allocate().apply {
             flags = VkFenceCreateFlags.SIGNALED
         }
-
-        val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-        val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-        val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
-        val fences = VkFence.malloc()
-        fences.set(inFlightFence)
 
         val clearColor = VkClearValue.malloc().apply {
             color.float32[0] = 0f
@@ -526,9 +538,33 @@ fun main() {
             color.float32[3] = 1f
         }
 
-        while (glfwWindowShouldClose(window) == GLFW_FALSE) {
-            glfwPollEvents()
-            MemoryStack {
+        class Frame {
+            val pCommandBuffer = VkCommandBuffer.malloc()
+            val commandBuffer: VkCommandBuffer
+
+            init {
+                device.allocateCommandBuffers(commandBufferAllocateInfo.ptr(), pCommandBuffer.ptr())
+                commandBuffer = VkCommandBuffer.fromNativeData(commandPool, pCommandBuffer.value)
+            }
+
+            val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
+            val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
+
+            val pImageAvailableSemaphore = VkSemaphore.malloc().apply {
+                set(imageAvailableSemaphore)
+            }
+            val pRenderFinishedSemaphore = VkSemaphore.malloc().apply {
+                set(renderFinishedSemaphore)
+            }
+
+            val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
+
+            val fences = VkFence.malloc().apply {
+                set(inFlightFence)
+            }
+
+            context(f: MemoryStack.Frame)
+            fun render() {
                 device.waitForFences(1u, fences.ptr(), VK_TRUE, ULong.MAX_VALUE)
                 device.resetFences(1u, fences.ptr())
 
@@ -565,19 +601,14 @@ fun main() {
                 commandBuffer.cmdDraw(3u, 1u, 0u, 0u)
 
                 commandBuffer.cmdEndRenderPass()
-
                 commandBuffer.endCommandBuffer()
 
                 val waitStages = VkPipelineStageFlags.malloc(1).apply {
                     this[0] = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
                 }
-                val waitSemaphores = VkSemaphore.malloc()
-                val signalSemaphores = VkSemaphore.malloc()
-                waitSemaphores.set(imageAvailableSemaphore)
-                signalSemaphores.set(renderFinishedSemaphore)
                 val submitInfo = VkSubmitInfo.allocate().apply {
                     waitSemaphoreCount = 1u
-                    pWaitSemaphores = waitSemaphores.ptr()
+                    pWaitSemaphores = pImageAvailableSemaphore.ptr()
 
                     pWaitDstStageMask = waitStages.ptr()
 
@@ -585,10 +616,9 @@ fun main() {
                     pCommandBuffers = pCommandBuffer.ptr()
 
                     signalSemaphoreCount = 1u
-                    pSignalSemaphores = signalSemaphores.ptr()
+                    pSignalSemaphores = pRenderFinishedSemaphore.ptr()
                 }
-                device.vkQueueSubmit(
-                    graphicsQueue,
+                graphicsQueue.queueSubmit(
                     1u,
                     submitInfo.ptr(),
                     inFlightFence
@@ -598,24 +628,41 @@ fun main() {
                 swapchains.set(swapchain)
                 val presentInfo = VkPresentInfoKHR.allocate().apply {
                     waitSemaphoreCount = 1u
-                    pWaitSemaphores = signalSemaphores.ptr()
+                    pWaitSemaphores = pRenderFinishedSemaphore.ptr()
 
                     swapchainCount = 1u
                     pSwapchains = swapchains.ptr()
 
                     pImageIndices = pImageIndex.ptr()
                 }
-                device.vkQueuePresentKHR(
-                    presentQueue,
-                    presentInfo.ptr()
-                )
+                graphicsQueue.queuePresentKHR(presentInfo.ptr())
+            }
+
+            fun destroy() {
+                device.destroySemaphore(imageAvailableSemaphore, null)
+                device.destroySemaphore(renderFinishedSemaphore, null)
+                device.destroyFence(inFlightFence, null)
+            }
+        }
+
+        val frames = List(10) {
+            Frame()
+        }
+
+        var frameIndex = 0
+
+        while (glfwWindowShouldClose(window) == GLFW_FALSE) {
+            glfwPollEvents()
+            MemoryStack {
+                frames[frameIndex].render()
+                frameIndex = (frameIndex + 1) % frames.size
             }
         }
         device.deviceWaitIdle()
 
-        device.destroySemaphore(imageAvailableSemaphore, null)
-        device.destroySemaphore(renderFinishedSemaphore, null)
-        device.destroyFence(inFlightFence, null)
+        frames.forEach {
+            it.destroy()
+        }
         device.destroyCommandPool(commandPool, null)
         for (framebuffer in swapchainFramebuffers) {
             device.destroyFramebuffer(framebuffer, null)
@@ -630,7 +677,9 @@ fun main() {
         device.destroySwapchainKHR(swapchain, null)
         device.destroyDevice(null)
         instance.destroySurfaceKHR(surface, null)
-        instance.destroyDebugUtilsMessengerEXT(debugUtilsMessenger, null)
+        if (debugUtilsMessenger != null) {
+            instance.destroyDebugUtilsMessengerEXT(debugUtilsMessenger, null)
+        }
         instance.destroyInstance(null)
 
         glfwTerminate()
