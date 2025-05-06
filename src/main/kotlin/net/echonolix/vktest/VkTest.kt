@@ -104,24 +104,41 @@ fun main() {
             null
         }
 
-        var physicalDeviceHandle = -1L
-        MemoryStack {
-            val physicalDeviceCount = NativeUInt32.calloc()
-            instance.enumeratePhysicalDevices(physicalDeviceCount.ptr(), null)
-            check(physicalDeviceCount.value != 0u) { "No physical device found." }
-            val physicalDevices = VkPhysicalDevice.malloc(physicalDeviceCount.value)
-            instance.enumeratePhysicalDevices(physicalDeviceCount.ptr(), physicalDevices.ptr())
-            repeat(physicalDeviceCount.value.toInt()) {
-                val device = VkPhysicalDevice.fromNativeData(instance, physicalDevices[it])
-                val property = VkPhysicalDeviceProperties.allocate()
-                device.getPhysicalDeviceProperties(property.ptr())
-                if (property.deviceType == VkPhysicalDeviceType.DISCRETE_GPU) physicalDeviceHandle = device.handle
-            }
+        val physicalDevices = enumerate(instance::enumeratePhysicalDevices) { pointer, index ->
+            VkPhysicalDevice.fromNativeData(
+                instance,
+                pointer[index]
+            )
         }
-        check(physicalDeviceHandle != -1L) { "No suitable physical device found." }
+        val physicalDevice = MemoryStack {
+            physicalDevices.asSequence()
+                .map {
+                    val property = VkPhysicalDeviceProperties.allocate()
+                    it.getPhysicalDeviceProperties(property.ptr())
+                    it to property
+                }
+                .maxWithOrNull(
+                    compareBy<Pair<VkPhysicalDevice, NativeValue<VkPhysicalDeviceProperties>>> { (_, property) ->
+                        when (property.deviceType) {
+                            VkPhysicalDeviceType.DISCRETE_GPU -> 4
+                            VkPhysicalDeviceType.VIRTUAL_GPU -> 3
+                            VkPhysicalDeviceType.INTEGRATED_GPU -> 2
+                            VkPhysicalDeviceType.CPU -> 1
+                            VkPhysicalDeviceType.OTHER -> 0
+                        }
+                    }.thenBy { (_, property) ->
+                        when (property.vendorID) {
+                            0x10DEU -> 4 // NVIDIA
+                            0x1002U -> 3 // AMD
+                            0x8086U -> 2 // Intel
+                            else -> 1
+                        }
+                    }
+                )?.first ?: error("No suitable physical device found.")
+        }
+
         val physicalDeviceProperties = VkPhysicalDeviceProperties.allocate()
         val physicalDeviceFeatures = VkPhysicalDeviceFeatures.allocate()
-        val physicalDevice = VkPhysicalDevice.fromNativeData(instance, physicalDeviceHandle)
         physicalDevice.getPhysicalDeviceProperties(physicalDeviceProperties.ptr())
         physicalDevice.getPhysicalDeviceFeatures(physicalDeviceFeatures.ptr())
 
