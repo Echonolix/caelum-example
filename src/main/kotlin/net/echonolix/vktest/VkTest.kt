@@ -14,7 +14,9 @@ import net.echonolix.caelum.vulkan.structs.*
 import net.echonolix.caelum.vulkan.unions.VkClearValue
 import net.echonolix.caelum.vulkan.unions.color
 import net.echonolix.caelum.vulkan.unions.float32
+import net.echonolix.vktest.utils.AverageCounter
 import java.lang.foreign.MemorySegment
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -38,7 +40,7 @@ fun main() {
         val window = glfwCreateWindow(width, height, "Vulkan".c_str(), nullptr(), nullptr())
         // endregion
 
-        val useValidationLayer = true
+        val useValidationLayer = false
 
         val layers = if (useValidationLayer) {
             setOf("VK_LAYER_KHRONOS_validation")
@@ -57,7 +59,7 @@ fun main() {
         val appInfo = VkApplicationInfo.allocate().apply {
             pApplicationName = "Hello Vulkan".c_str()
             applicationVersion = VkApiVersion(0u, 1u, 0u, 0u).value
-            pEngineName = "Echonolix".c_str()
+            pEngineName = "VK Test".c_str()
             engineVersion = VkApiVersion(0u, 1u, 0u, 0u).value
             apiVersion = VK_API_VERSION_1_0.value
         }
@@ -661,19 +663,31 @@ fun main() {
             }
         }
 
-        val frames = List(2) {
+        val frames = List(10) {
             Frame()
         }
 
         var frameIndex = 0
 
+        val isRunning = AtomicBoolean(true)
+
+        Thread {
+            val counter = AverageCounter(1000, 8)
+            while (isRunning.get()) {
+                MemoryStack {
+                    frames[frameIndex].render()
+                    frameIndex = (frameIndex + 1) % frames.size
+                    counter.invoke {
+                        println("FPS: ${counter.averageCPS}")
+                    }
+                }
+            }
+        }.start()
+
         while (glfwWindowShouldClose(window) == GLFW_FALSE) {
             glfwPollEvents()
-            MemoryStack {
-                frames[frameIndex].render()
-                frameIndex = (frameIndex + 1) % frames.size
-            }
         }
+        isRunning.set(false)
         device.deviceWaitIdle()
 
         frames.forEach {
