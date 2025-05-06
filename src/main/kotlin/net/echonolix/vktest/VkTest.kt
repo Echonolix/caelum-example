@@ -38,7 +38,7 @@ fun main() {
         val window = glfwCreateWindow(width, height, "Vulkan".c_str(), nullptr(), nullptr())
         // endregion
 
-        val useValidationLayer = false
+        val useValidationLayer = true
 
         val layers = if (useValidationLayer) {
             setOf("VK_LAYER_KHRONOS_validation")
