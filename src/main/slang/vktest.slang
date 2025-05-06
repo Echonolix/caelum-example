@@ -43,5 +43,14 @@ FSOutput fragmentMain(VSOutput input) {
     return output;
 }
 
+[shader("fragment")]
+FSOutput fragmentMain2(VSOutput input) {
+  FSOutput output;
+
+  output.color = input.color.bgra;
+
+  return output;
+}
+
 
 

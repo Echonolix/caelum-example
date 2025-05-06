@@ -319,12 +319,12 @@ fun main() {
         shaderStages[0].apply {
             stage = VkShaderStageFlags.VERTEX
             module = vkTestShaderModule
-            pName = "main".c_str()
+            pName = "vertexMain".c_str()
         }
         shaderStages[1].apply {
             stage = VkShaderStageFlags.FRAGMENT
             module = vkTestShaderModule
-            pName = "main".c_str()
+            pName = "fragmentMain".c_str()
         }
 
         val vertexInputStateCreateInfo = VkPipelineVertexInputStateCreateInfo.allocate().apply {
