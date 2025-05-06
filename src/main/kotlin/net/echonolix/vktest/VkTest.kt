@@ -14,18 +14,14 @@ import net.echonolix.caelum.vulkan.structs.*
 import net.echonolix.caelum.vulkan.unions.VkClearValue
 import net.echonolix.caelum.vulkan.unions.color
 import net.echonolix.caelum.vulkan.unions.float32
-import org.lwjgl.util.shaderc.Shaderc
+import java.lang.foreign.MemorySegment
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
-import org.lwjgl.system.MemoryStack as LwjglMemoryStack
 
 class VkTest
 
 @OptIn(UnsafeAPI::class)
 fun main() {
-    val triangleSpv = VkTest::class.java.getResource("/triangle.spv")!!.readBytes()
-    println(triangleSpv.size)
-
     fun loadLibrary(name: String) {
         System.load(Path("$name.dll").absolutePathString())
     }
@@ -306,117 +302,9 @@ fun main() {
             }
         }
 
-        val vertexShaderSourceCode = """
-            #version 450
-
-            layout(location = 0) out vec3 fragColor;
-
-            vec2 positions[3] = vec2[](
-                vec2(0.0, -0.5),
-                vec2(0.5, 0.5),
-                vec2(-0.5, 0.5)
-            );
-
-            vec3 colors[3] = vec3[](
-                vec3(1.0, 0.0, 0.0),
-                vec3(0.0, 1.0, 0.0),
-                vec3(0.0, 0.0, 1.0)
-            );
-
-            void main() {
-                gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-                fragColor = colors[gl_VertexIndex];
-            }
-        """.trimIndent()
-        val fragmentShaderSourceCode = """
-            #version 450
-
-            layout(location = 0) in vec3 fragColor;
-
-            layout(location = 0) out vec4 outColor;
-
-            void main() {
-                outColor = vec4(fragColor, 1.0);
-            }
-        """.trimIndent()
-
-        class ShaderCompiler {
-            var available = true; private set
-            private val compiler = Shaderc.shaderc_compiler_initialize()
-
-            fun compileGlslToSpv(
-                source: String,
-                kind: Int,
-                fileName: String,
-                entryPoint: String = "main",
-                options: CompilerOptions? = null
-            ): CompilationResult {
-                checkAvailability()
-                LwjglMemoryStack.stackPush().use { stack ->
-                    val sourceBuffer = stack.ASCII(source, false) // fuck you
-                    val fileNameBuffer = stack.ASCII(fileName)
-                    val entryPointBuffer = stack.ASCII(entryPoint)
-                    val result = Shaderc.shaderc_compile_into_spv(
-                        compiler, sourceBuffer, kind, fileNameBuffer,
-                        entryPointBuffer, options?.options ?: 0
-                    )
-                    return CompilationResult(result)
-                }
-            }
-
-            private fun checkAvailability() {
-                check(available)
-            }
-
-            fun destroy() {
-                Shaderc.shaderc_compiler_release(compiler)
-                available = false
-            }
-
-            inner class CompilationResult(val handle: Long) {
-                val errorMessage = Shaderc.shaderc_result_get_error_message(handle)
-                val compilationStatus = Shaderc.shaderc_result_get_compilation_status(handle)
-                val numWarnings = Shaderc.shaderc_result_get_num_warnings(handle)
-                val numErrors = Shaderc.shaderc_result_get_num_errors(handle)
-                val binaryLength = Shaderc.shaderc_result_get_length(handle)
-                val binary by lazy { Shaderc.shaderc_result_get_bytes(handle) }
-            }
-
-            inner class CompilerOptions {
-                var available = true; private set
-                val options = Shaderc.shaderc_compile_options_initialize()
-                    get() {
-                        checkAvailability()
-                        return field
-                    }
-
-                private fun checkAvailability() {
-                    check(available)
-                }
-
-                fun destroy() {
-                    Shaderc.shaderc_compile_options_release(options)
-                    available = false
-                }
-            }
-        }
-
-        val shaderCompiler = ShaderCompiler()
-
-        val vshCompilationResult =
-            shaderCompiler.compileGlslToSpv(vertexShaderSourceCode, Shaderc.shaderc_vertex_shader, "vert.glsl")
-        vshCompilationResult.errorMessage?.let { println(it) }
-        val fshCompilationResult =
-            shaderCompiler.compileGlslToSpv(fragmentShaderSourceCode, Shaderc.shaderc_fragment_shader, "frag.glsl")
-        fshCompilationResult.errorMessage?.let { println(it) }
-        val vshSpv = ByteArray(vshCompilationResult.binary!!.remaining())
-            .also { vshCompilationResult.binary!!.get(it) }
-        val fshSpv = ByteArray(fshCompilationResult.binary!!.remaining())
-            .also { fshCompilationResult.binary!!.get(it) }
-
-        fun VkDevice.createShaderModule(code: ByteArray): VkShaderModule {
+        fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
             val codeBuffer = NativeInt8.malloc(code.size)
-            for (i in code.indices) codeBuffer[i] = code[i]
+            codeBuffer._segment.copyFrom(MemorySegment.ofArray(code))
             val createInfo = VkShaderModuleCreateInfo.allocate().apply {
                 codeSize = code.size.toLong()
                 pCode = reinterpretCast(codeBuffer.ptr())
@@ -424,20 +312,18 @@ fun main() {
             return createShaderModule(createInfo.ptr(), null).getOrThrow()
         }
 
-        val vshModule = device.createShaderModule(vshSpv)
-        val fshModule = device.createShaderModule(fshSpv)
-
-        shaderCompiler.destroy()
+        val vktestSpvData = VkTest::class.java.getResource("/vktest.spv")!!.readBytes()
+        val vkTestShaderModule = device.makeShaderModule(vktestSpvData)
 
         val shaderStages = VkPipelineShaderStageCreateInfo.allocate(2)
         shaderStages[0].apply {
             stage = VkShaderStageFlags.VERTEX
-            module = vshModule
+            module = vkTestShaderModule
             pName = "main".c_str()
         }
         shaderStages[1].apply {
             stage = VkShaderStageFlags.FRAGMENT
-            module = fshModule
+            module = vkTestShaderModule
             pName = "main".c_str()
         }
 
@@ -737,8 +623,7 @@ fun main() {
         device.destroyPipeline(pipeline, null)
         device.destroyPipelineLayout(pipelineLayout, null)
         device.destroyRenderPass(renderPass, null)
-        device.destroyShaderModule(vshModule, null)
-        device.destroyShaderModule(fshModule, null)
+        device.destroyShaderModule(vkTestShaderModule, null)
         for (imageView in swapchainImageViews) {
             device.destroyImageView(imageView, null)
         }

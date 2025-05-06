@@ -1,5 +1,3 @@
-import net.echonolix.slang.SlangCompileTarget
-
 allprojects {
     group = "net.echonolix"
     version = "1.0-SNAPSHOT"
@@ -30,18 +28,8 @@ dependencies {
     implementation("net.echonolix:caelum-glfw-vulkan:1.0-SNAPSHOT")
 }
 
-allprojects {
-    kotlin {
-        compilerOptions {
-            optIn.add("kotlin.contracts.ExperimentalContracts")
-            freeCompilerArgs.addAll("-Xbackend-threads=0", "-Xcontext-parameters")
-        }
-    }
-}
-
 slang {
     compilerOptions {
-        target.set(SlangCompileTarget.SPIR_V)
         debug.set(true)
     }
 }
@@ -50,6 +38,11 @@ java {
     withSourcesJar()
 }
 
-afterEvaluate {
-    println(configurations.runtimeClasspath.get().elements.get().toList())
+allprojects {
+    kotlin {
+        compilerOptions {
+            optIn.add("kotlin.contracts.ExperimentalContracts")
+            freeCompilerArgs.addAll("-Xbackend-threads=0", "-Xcontext-parameters")
+        }
+    }
 }
