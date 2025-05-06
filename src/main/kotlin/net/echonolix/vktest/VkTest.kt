@@ -19,8 +19,13 @@ import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 import org.lwjgl.system.MemoryStack as LwjglMemoryStack
 
+class VkTest
+
 @OptIn(UnsafeAPI::class)
 fun main() {
+    val triangleSpv = VkTest::class.java.getResource("/triangle.spv")!!.readBytes()
+    println(triangleSpv.size)
+
     fun loadLibrary(name: String) {
         System.load(Path("$name.dll").absolutePathString())
     }

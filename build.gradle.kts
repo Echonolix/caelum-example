@@ -1,3 +1,5 @@
+import net.echonolix.slang.SlangCompileTarget
+
 allprojects {
     group = "net.echonolix"
     version = "1.0-SNAPSHOT"
@@ -10,6 +12,7 @@ allprojects {
 
 plugins {
     kotlin("jvm")
+    id("net.echonolix.slang-gradle-plugin")
 }
 
 val lwjglVersion = "3.3.6"
@@ -34,4 +37,19 @@ allprojects {
             freeCompilerArgs.addAll("-Xbackend-threads=0", "-Xcontext-parameters")
         }
     }
+}
+
+slang {
+    compilerOptions {
+        target.set(SlangCompileTarget.SPIR_V)
+        debug.set(true)
+    }
+}
+
+java {
+    withSourcesJar()
+}
+
+afterEvaluate {
+    println(configurations.runtimeClasspath.get().elements.get().toList())
 }
