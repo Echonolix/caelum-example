@@ -244,7 +244,7 @@ fun main() {
         }
 
         fun choosePresentMode(modes: List<VkPresentModeKHR>) = modes.find {
-            it == VkPresentModeKHR.MAILBOX_KHR
+            it == VkPresentModeKHR.IMMEDIATE_KHR
         } ?: VkPresentModeKHR.FIFO_KHR
 
         fun chooseSwapchainExtent(capabilities: NativeValue<VkSurfaceCapabilitiesKHR>): NativePointer<VkExtent2D> {
