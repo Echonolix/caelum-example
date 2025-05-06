@@ -547,14 +547,14 @@ fun main() {
                 commandBuffer = VkCommandBuffer.fromNativeData(commandPool, pCommandBuffer.value)
             }
 
-            val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
             val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-
-            val pImageAvailableSemaphore = VkSemaphore.malloc().apply {
-                set(imageAvailableSemaphore)
-            }
             val pRenderFinishedSemaphore = VkSemaphore.malloc().apply {
                 set(renderFinishedSemaphore)
+            }
+
+            val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
+            val pImageAvailableSemaphore = VkSemaphore.malloc().apply {
+                set(imageAvailableSemaphore)
             }
 
             val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
@@ -639,13 +639,12 @@ fun main() {
             }
 
             fun destroy() {
-                device.destroySemaphore(imageAvailableSemaphore, null)
                 device.destroySemaphore(renderFinishedSemaphore, null)
                 device.destroyFence(inFlightFence, null)
             }
         }
 
-        val frames = List(10) {
+        val frames = List(2) {
             Frame()
         }
 
