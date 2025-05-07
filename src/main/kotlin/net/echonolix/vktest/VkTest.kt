@@ -16,7 +16,6 @@ import net.echonolix.caelum.vulkan.unions.color
 import net.echonolix.caelum.vulkan.unions.float32
 import net.echonolix.vktest.utils.AverageCounter
 import java.lang.foreign.MemorySegment
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -48,7 +47,7 @@ fun main() {
             emptySet()
         }
         val extensions = buildSet {
-            val count = NativeUInt32.malloc()
+            val count = NUInt32.malloc()
             val buffer = glfwGetRequiredInstanceExtensions(count.ptr())
             repeat(count.value.toInt()) {
                 add(buffer[it].string)
@@ -64,7 +63,7 @@ fun main() {
             apiVersion = VK_API_VERSION_1_0.value
         }
 
-        fun populateDebugMessengerCreateInfo(debugCreateInfo: NativeValue<VkDebugUtilsMessengerCreateInfoEXT>) {
+        fun populateDebugMessengerCreateInfo(debugCreateInfo: NValue<VkDebugUtilsMessengerCreateInfoEXT>) {
             debugCreateInfo.messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VERBOSE_EXT +
                 VkDebugUtilsMessageSeverityFlagsEXT.WARNING_EXT +
                 VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT
@@ -120,7 +119,7 @@ fun main() {
                     it to property
                 }
                 .maxWithOrNull(
-                    compareBy<Pair<VkPhysicalDevice, NativeValue<VkPhysicalDeviceProperties>>> { (_, property) ->
+                    compareBy<Pair<VkPhysicalDevice, NValue<VkPhysicalDeviceProperties>>> { (_, property) ->
                         when (property.deviceType) {
                             VkPhysicalDeviceType.DISCRETE_GPU -> 4
                             VkPhysicalDeviceType.VIRTUAL_GPU -> 3
@@ -150,7 +149,7 @@ fun main() {
         var graphicsQueueFamilyIndex = -1
         var presentQueueFamilyIndex = -1
         MemoryStack {
-            val queueFamilyPropertyCount = NativeUInt32.calloc()
+            val queueFamilyPropertyCount = NUInt32.calloc()
             physicalDevice.getPhysicalDeviceQueueFamilyProperties(queueFamilyPropertyCount.ptr(), null)
             val queueFamilyProperties = VkQueueFamilyProperties.allocate(queueFamilyPropertyCount.value)
             physicalDevice.getPhysicalDeviceQueueFamilyProperties(
@@ -162,7 +161,7 @@ fun main() {
                 if (graphicsQueueFamilyIndex == -1 && queueFamilyProperty.queueFlags.contains(VkQueueFlags.GRAPHICS)) {
                     graphicsQueueFamilyIndex = it
                 } else {
-                    val isPresentSupported = NativeUInt32.malloc()
+                    val isPresentSupported = NUInt32.malloc()
                     physicalDevice.getPhysicalDeviceSurfaceSupportKHR(it.toUInt(), surface, isPresentSupported.ptr())
                     if (isPresentSupported.value == 1u && presentQueueFamilyIndex == -1) {
                         presentQueueFamilyIndex = it
@@ -173,7 +172,7 @@ fun main() {
 
         println("Graphics Queue: $graphicsQueueFamilyIndex, Present Queue: $presentQueueFamilyIndex")
 
-        val queuePriority = NativeFloat.calloc().apply { value = 1f }
+        val queuePriority = NFloat.calloc().apply { value = 1f }
         val queueCreateInfos = VkDeviceQueueCreateInfo.allocate(2)
         queueCreateInfos[0].apply {
             queueFamilyIndex = graphicsQueueFamilyIndex.toUInt()
@@ -207,8 +206,8 @@ fun main() {
         VkQueue.fromNativeData(device, presentQueueV.value)
 
         data class SwapchainSupportDetails(
-            val capabilities: NativeValue<VkSurfaceCapabilitiesKHR>,
-            val formats: List<NativePointer<VkSurfaceFormatKHR>>,
+            val capabilities: NValue<VkSurfaceCapabilitiesKHR>,
+            val formats: List<NPointer<VkSurfaceFormatKHR>>,
             val presentModes: List<VkPresentModeKHR>
         )
 
@@ -216,7 +215,7 @@ fun main() {
             val capabilities = VkSurfaceCapabilitiesKHR.allocate()
             getPhysicalDeviceSurfaceCapabilitiesKHR(surface, capabilities.ptr())
 
-            val formatCount = NativeUInt32.malloc()
+            val formatCount = NUInt32.malloc()
             getPhysicalDeviceSurfaceFormatsKHR(surface, formatCount.ptr(), null)
             val formatsBuffer = VkSurfaceFormatKHR.allocate(formatCount.value)
             getPhysicalDeviceSurfaceFormatsKHR(surface, formatCount.ptr(), formatsBuffer.ptr())
@@ -226,7 +225,7 @@ fun main() {
                 }
             }
 
-            val presentModeCount = NativeUInt32.malloc()
+            val presentModeCount = NUInt32.malloc()
             getPhysicalDeviceSurfacePresentModesKHR(surface, presentModeCount.ptr(), null)
             val presentModesBuffer = VkPresentModeKHR.malloc(presentModeCount.value)
             getPhysicalDeviceSurfacePresentModesKHR(surface, presentModeCount.ptr(), presentModesBuffer.ptr())
@@ -239,7 +238,7 @@ fun main() {
             return SwapchainSupportDetails(capabilities, formats, presentModes)
         }
 
-        fun chooseSwapchainFormat(formats: List<NativePointer<VkSurfaceFormatKHR>>) = formats.find {
+        fun chooseSwapchainFormat(formats: List<NPointer<VkSurfaceFormatKHR>>) = formats.find {
             it.format == VkFormat.R8G8B8A8_UNORM
         }
 
@@ -247,11 +246,11 @@ fun main() {
             it == VkPresentModeKHR.IMMEDIATE_KHR
         } ?: VkPresentModeKHR.FIFO_KHR
 
-        fun chooseSwapchainExtent(capabilities: NativeValue<VkSurfaceCapabilitiesKHR>): NativePointer<VkExtent2D> {
+        fun chooseSwapchainExtent(capabilities: NValue<VkSurfaceCapabilitiesKHR>): NPointer<VkExtent2D> {
             return if (capabilities.currentExtent.width != UInt.MAX_VALUE) capabilities.currentExtent
             else {
-                val widthBuffer = NativeInt.malloc()
-                val heightBuffer = NativeInt.calloc()
+                val widthBuffer = NInt.malloc()
+                val heightBuffer = NInt.malloc()
                 glfwGetWindowSize(window, widthBuffer.ptr(), heightBuffer.ptr())
 
                 val actualExtent = VkExtent2D.allocate().apply {
@@ -293,7 +292,7 @@ fun main() {
             imageArrayLayers = 1u
             imageUsage = VkImageUsageFlags.COLOR_ATTACHMENT
 
-            val queueFamilyIndices = NativeUInt32.malloc(2)
+            val queueFamilyIndices = NUInt32.malloc(2)
             queueFamilyIndices[0] = graphicsQueueFamilyIndex.toUInt()
             queueFamilyIndices[1] = presentQueueFamilyIndex.toUInt()
             if (graphicsQueueFamilyIndex != presentQueueFamilyIndex) {
@@ -311,7 +310,7 @@ fun main() {
         }
         val swapchain = device.createSwapchainKHR(swapchainCreateInfo.ptr(), null).getOrThrow()
 
-        val swapchainImageCount = NativeUInt32.malloc()
+        val swapchainImageCount = NUInt32.malloc()
         device.getSwapchainImagesKHR(swapchain, swapchainImageCount.ptr(), null)
         println("Swapchain image count: ${swapchainImageCount.value}")
         val swapchainImages = buildList {
@@ -344,8 +343,8 @@ fun main() {
         }
 
         fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
-            val codeBuffer = NativeInt8.malloc(code.size)
-            codeBuffer._segment.copyFrom(MemorySegment.ofArray(code))
+            val codeBuffer = NInt8.malloc(code.size)
+            codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
             val createInfo = VkShaderModuleCreateInfo.allocate().apply {
                 codeSize = code.size.toLong()
                 pCode = reinterpretCast(codeBuffer.ptr())
@@ -518,8 +517,7 @@ fun main() {
 
         val swapchainFramebuffers = buildList {
             repeat(swapchainImageViews.size) {
-                val attachments = VkImageView.malloc()
-                attachments.set(swapchainImageViews[it])
+                val attachments = VkImageView.valueOf(swapchainImageViews[it])
                 val framebufferCreateInfo = VkFramebufferCreateInfo.allocate().apply {
                     this.renderPass = renderPass
                     attachmentCount = 1u
@@ -567,27 +565,21 @@ fun main() {
             }
 
             val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-            val pRenderFinishedSemaphore = VkSemaphore.malloc().apply {
-                set(renderFinishedSemaphore)
-            }
+            val pRenderFinishedSemaphore = VkSemaphore.valueOf(renderFinishedSemaphore)
 
             val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-            val pImageAvailableSemaphore = VkSemaphore.malloc().apply {
-                set(imageAvailableSemaphore)
-            }
+            val pImageAvailableSemaphore = VkSemaphore.valueOf(imageAvailableSemaphore)
 
             val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
 
-            val fences = VkFence.malloc().apply {
-                set(inFlightFence)
-            }
+            val fences = VkFence.valueOf(inFlightFence)
 
             context(f: MemoryStack.Frame)
             fun render() {
                 device.waitForFences(1u, fences.ptr(), VK_TRUE, ULong.MAX_VALUE)
                 device.resetFences(1u, fences.ptr())
 
-                val pImageIndex = NativeUInt32.malloc()
+                val pImageIndex = NUInt32.malloc()
                 device.acquireNextImageKHR(
                     swapchain,
                     ULong.MAX_VALUE,
@@ -643,14 +635,12 @@ fun main() {
                     inFlightFence
                 )
 
-                val swapchains = VkSwapchainKHR.malloc()
-                swapchains.set(swapchain)
                 val presentInfo = VkPresentInfoKHR.allocate().apply {
                     waitSemaphoreCount = 1u
                     pWaitSemaphores = pRenderFinishedSemaphore.ptr()
 
                     swapchainCount = 1u
-                    pSwapchains = swapchains.ptr()
+                    pSwapchains = VkSwapchainKHR.valueOf(swapchain).ptr()
 
                     pImageIndices = pImageIndex.ptr()
                 }
@@ -668,26 +658,19 @@ fun main() {
         }
 
         var frameIndex = 0
-
-        val isRunning = AtomicBoolean(true)
-
-        Thread {
-            val counter = AverageCounter(1000, 8)
-            while (isRunning.get()) {
-                MemoryStack {
-                    frames[frameIndex].render()
-                    frameIndex = (frameIndex + 1) % frames.size
-                    counter.invoke {
-                        println("FPS: ${counter.averageCPS}")
-                    }
-                }
-            }
-        }.start()
+        val counter = AverageCounter(1000, 8)
 
         while (glfwWindowShouldClose(window) == GLFW_FALSE) {
             glfwPollEvents()
+            MemoryStack {
+                frames[frameIndex].render()
+                frameIndex = (frameIndex + 1) % frames.size
+                counter.invoke {
+                    println("FPS: ${counter.averageCPS}")
+                }
+            }
         }
-        isRunning.set(false)
+
         device.deviceWaitIdle()
 
         frames.forEach {
