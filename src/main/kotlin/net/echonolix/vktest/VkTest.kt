@@ -21,12 +21,12 @@ import kotlin.io.path.absolutePathString
 
 class VkTest
 
+fun loadLibrary(name: String) {
+    System.load(Path("$name.dll").absolutePathString())
+}
+
 @OptIn(UnsafeAPI::class)
 fun main() {
-    fun loadLibrary(name: String) {
-        System.load(Path("$name.dll").absolutePathString())
-    }
-
     loadLibrary("glfw3")
 
     MemoryStack {
@@ -63,25 +63,6 @@ fun main() {
             apiVersion = VK_API_VERSION_1_0.value
         }
 
-        fun populateDebugMessengerCreateInfo(debugCreateInfo: NValue<VkDebugUtilsMessengerCreateInfoEXT>) {
-            debugCreateInfo.messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VERBOSE_EXT +
-                VkDebugUtilsMessageSeverityFlagsEXT.WARNING_EXT +
-                VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT
-
-            debugCreateInfo.messageType = VkDebugUtilsMessageTypeFlagsEXT.GENERAL_EXT +
-                VkDebugUtilsMessageTypeFlagsEXT.VALIDATION_EXT +
-                VkDebugUtilsMessageTypeFlagsEXT.PERFORMANCE_EXT
-
-            debugCreateInfo.pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
-                if (VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT in messageSeverity) {
-                    System.err.println("Validation layer: " + pCallbackData.pMessage.string)
-                } else {
-                    println("Validation layer: " + pCallbackData.pMessage.string)
-                }
-                VK_FALSE
-            }
-        }
-
         val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.allocate()
         populateDebugMessengerCreateInfo(debugCreateInfo)
 
@@ -105,38 +86,7 @@ fun main() {
             null
         }
 
-        val physicalDevices = enumerate(instance::enumeratePhysicalDevices) { pointer, index ->
-            VkPhysicalDevice.fromNativeData(
-                instance,
-                pointer[index]
-            )
-        }
-        val physicalDevice = MemoryStack {
-            physicalDevices.asSequence()
-                .map {
-                    val property = VkPhysicalDeviceProperties.allocate()
-                    it.getPhysicalDeviceProperties(property.ptr())
-                    it to property
-                }
-                .maxWithOrNull(
-                    compareBy<Pair<VkPhysicalDevice, NValue<VkPhysicalDeviceProperties>>> { (_, property) ->
-                        when (property.deviceType) {
-                            VkPhysicalDeviceType.DISCRETE_GPU -> 4
-                            VkPhysicalDeviceType.VIRTUAL_GPU -> 3
-                            VkPhysicalDeviceType.INTEGRATED_GPU -> 2
-                            VkPhysicalDeviceType.CPU -> 1
-                            VkPhysicalDeviceType.OTHER -> 0
-                        }
-                    }.thenBy { (_, property) ->
-                        when (property.vendorID) {
-                            0x10DEU -> 4 // NVIDIA
-                            0x1002U -> 3 // AMD
-                            0x8086U -> 2 // Intel
-                            else -> 1
-                        }
-                    }
-                )?.first ?: error("No suitable physical device found.")
-        }
+        val physicalDevice = choosePhysicalDevice(instance)
 
         val physicalDeviceProperties = VkPhysicalDeviceProperties.allocate()
         val physicalDeviceFeatures = VkPhysicalDeviceFeatures.allocate()
@@ -147,7 +97,6 @@ fun main() {
 
         val surface = glfwCreateWindowSurface(instance, window, null).getOrThrow()
         var graphicsQueueFamilyIndex = -1
-        var presentQueueFamilyIndex = -1
         MemoryStack {
             val queueFamilyPropertyCount = NUInt32.calloc()
             physicalDevice.getPhysicalDeviceQueueFamilyProperties(queueFamilyPropertyCount.ptr(), null)
@@ -156,38 +105,30 @@ fun main() {
                 queueFamilyPropertyCount.ptr(),
                 queueFamilyProperties.ptr()
             )
+            val isPresentSupported = NUInt32.malloc()
             repeat(queueFamilyPropertyCount.value.toInt()) {
                 val queueFamilyProperty = queueFamilyProperties[it.toLong()]
                 if (graphicsQueueFamilyIndex == -1 && queueFamilyProperty.queueFlags.contains(VkQueueFlags.GRAPHICS)) {
-                    graphicsQueueFamilyIndex = it
-                } else {
-                    val isPresentSupported = NUInt32.malloc()
                     physicalDevice.getPhysicalDeviceSurfaceSupportKHR(it.toUInt(), surface, isPresentSupported.ptr())
-                    if (isPresentSupported.value == 1u && presentQueueFamilyIndex == -1) {
-                        presentQueueFamilyIndex = it
-                    }
+                    check(isPresentSupported.value == 1u) { "Graphics queue family does not support present." }
+                    graphicsQueueFamilyIndex = it
                 }
             }
         }
 
-        println("Graphics Queue: $graphicsQueueFamilyIndex, Present Queue: $presentQueueFamilyIndex")
+        println("Queue Family: $graphicsQueueFamilyIndex")
 
         val queuePriority = NFloat.calloc().apply { value = 1f }
-        val queueCreateInfos = VkDeviceQueueCreateInfo.allocate(2)
+        val queueCreateInfos = VkDeviceQueueCreateInfo.allocate(1)
         queueCreateInfos[0].apply {
             queueFamilyIndex = graphicsQueueFamilyIndex.toUInt()
-            queueCount = 1u
-            pQueuePriorities = queuePriority.ptr()
-        }
-        queueCreateInfos[1].apply {
-            queueFamilyIndex = presentQueueFamilyIndex.toUInt()
             queueCount = 1u
             pQueuePriorities = queuePriority.ptr()
         }
         val deviceExtensions = setOf(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
         val deviceCreateInfo = VkDeviceCreateInfo.allocate().apply {
             pQueueCreateInfos = queueCreateInfos.ptr()
-            queueCreateInfoCount = 2u
+            queueCreateInfoCount = 1u
 
             pEnabledFeatures = physicalDeviceFeatures.ptr()
 
@@ -199,11 +140,8 @@ fun main() {
         }
         val device = physicalDevice.createDevice(deviceCreateInfo.ptr(), null).getOrThrow()
         val graphicsQueueV = VkQueue.malloc()
-        val presentQueueV = VkQueue.malloc()
         device.getDeviceQueue(graphicsQueueFamilyIndex.toUInt(), 0u, graphicsQueueV.ptr())
-        device.getDeviceQueue(presentQueueFamilyIndex.toUInt(), 0u, presentQueueV.ptr())
         val graphicsQueue = VkQueue.fromNativeData(device, graphicsQueueV.value)
-        VkQueue.fromNativeData(device, presentQueueV.value)
 
         data class SwapchainSupportDetails(
             val capabilities: NValue<VkSurfaceCapabilitiesKHR>,
@@ -292,16 +230,7 @@ fun main() {
             imageArrayLayers = 1u
             imageUsage = VkImageUsageFlags.COLOR_ATTACHMENT
 
-            val queueFamilyIndices = NUInt32.malloc(2)
-            queueFamilyIndices[0] = graphicsQueueFamilyIndex.toUInt()
-            queueFamilyIndices[1] = presentQueueFamilyIndex.toUInt()
-            if (graphicsQueueFamilyIndex != presentQueueFamilyIndex) {
-                imageSharingMode = VkSharingMode.CONCURRENT
-                queueFamilyIndexCount = 2u
-                pQueueFamilyIndices = queueFamilyIndices.ptr()
-            } else {
-                imageSharingMode = VkSharingMode.EXCLUSIVE
-            }
+            imageSharingMode = VkSharingMode.EXCLUSIVE
 
             preTransform = swapchainSupport.capabilities.currentTransform
             compositeAlpha = VkCompositeAlphaFlagsKHR.OPAQUE_KHR
@@ -697,4 +626,55 @@ fun main() {
 
         glfwTerminate()
     }
+}
+
+private fun populateDebugMessengerCreateInfo(debugCreateInfo: NValue<VkDebugUtilsMessengerCreateInfoEXT>) {
+    debugCreateInfo.messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VERBOSE_EXT +
+        VkDebugUtilsMessageSeverityFlagsEXT.WARNING_EXT +
+        VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT
+
+    debugCreateInfo.messageType = VkDebugUtilsMessageTypeFlagsEXT.GENERAL_EXT +
+        VkDebugUtilsMessageTypeFlagsEXT.VALIDATION_EXT +
+        VkDebugUtilsMessageTypeFlagsEXT.PERFORMANCE_EXT
+
+    debugCreateInfo.pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
+        if (VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT in messageSeverity) {
+            System.err.println("Validation layer: " + pCallbackData.pMessage.string)
+        } else {
+            println("Validation layer: " + pCallbackData.pMessage.string)
+        }
+        VK_FALSE
+    }
+}
+
+private fun MemoryStack.Frame.choosePhysicalDevice(instance: VkInstance): VkPhysicalDevice = MemoryStack {
+    enumerate(instance::enumeratePhysicalDevices) { pointer, index ->
+        VkPhysicalDevice.fromNativeData(
+            instance,
+            pointer[index]
+        )
+    }.asSequence()
+        .map {
+            val property = VkPhysicalDeviceProperties.allocate()
+            it.getPhysicalDeviceProperties(property.ptr())
+            it to property
+        }
+        .maxWithOrNull(
+            compareBy<Pair<VkPhysicalDevice, NValue<VkPhysicalDeviceProperties>>> { (_, property) ->
+                when (property.deviceType) {
+                    VkPhysicalDeviceType.DISCRETE_GPU -> 4
+                    VkPhysicalDeviceType.VIRTUAL_GPU -> 3
+                    VkPhysicalDeviceType.INTEGRATED_GPU -> 2
+                    VkPhysicalDeviceType.CPU -> 1
+                    VkPhysicalDeviceType.OTHER -> 0
+                }
+            }.thenBy { (_, property) ->
+                when (property.vendorID) {
+                    0x10DEU -> 4 // NVIDIA
+                    0x1002U -> 3 // AMD
+                    0x8086U -> 2 // Intel
+                    else -> 1
+                }
+            }
+        )?.first ?: error("No suitable physical device found.")
 }
