@@ -29,6 +29,7 @@ data class SwapchainSupportDetails(
     val presentModes: List<VkPresentModeKHR>
 )
 
+context(_: MemoryStack.Frame)
 fun VkPhysicalDevice.querySwapchainSupport(surface: VkSurfaceKHR): SwapchainSupportDetails {
     val capabilities = VkSurfaceCapabilitiesKHR.allocate()
     getPhysicalDeviceSurfaceCapabilitiesKHR(surface, capabilities.ptr())
