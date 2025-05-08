@@ -49,7 +49,7 @@ fun main() {
         } + setOf(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
         println(extensions)
 
-        val appInfo = VkApplicationInfo.allocate().apply {
+        val appInfo = VkApplicationInfo.allocate {
             pApplicationName = "Hello Vulkan".c_str()
             applicationVersion = VkApiVersion(0u, 1u, 0u, 0u).value
             pEngineName = "VK Test".c_str()
@@ -60,7 +60,7 @@ fun main() {
         val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.allocate()
         populateDebugMessengerCreateInfo(debugCreateInfo)
 
-        val createInfo = VkInstanceCreateInfo.allocate().apply {
+        val createInfo = VkInstanceCreateInfo.allocate {
             pApplicationInfo = appInfo.ptr()
             ppEnabledExtensionNames = extensions.c_strs()
             enabledExtensionCount = extensions.size.toUInt()
@@ -90,25 +90,7 @@ fun main() {
         println("Using physical device ${physicalDeviceProperties.deviceName.string}")
 
         val surface = glfwCreateWindowSurface(instance, window, null).getOrThrow()
-        var graphicsQueueFamilyIndex = -1
-        MemoryStack {
-            val queueFamilyPropertyCount = NUInt32.calloc()
-            physicalDevice.getPhysicalDeviceQueueFamilyProperties(queueFamilyPropertyCount.ptr(), null)
-            val queueFamilyProperties = VkQueueFamilyProperties.allocate(queueFamilyPropertyCount.value)
-            physicalDevice.getPhysicalDeviceQueueFamilyProperties(
-                queueFamilyPropertyCount.ptr(),
-                queueFamilyProperties.ptr()
-            )
-            val isPresentSupported = NUInt32.malloc()
-            repeat(queueFamilyPropertyCount.value.toInt()) {
-                val queueFamilyProperty = queueFamilyProperties[it.toLong()]
-                if (graphicsQueueFamilyIndex == -1 && queueFamilyProperty.queueFlags.contains(VkQueueFlags.GRAPHICS)) {
-                    physicalDevice.getPhysicalDeviceSurfaceSupportKHR(it.toUInt(), surface, isPresentSupported.ptr())
-                    check(isPresentSupported.value == 1u) { "Graphics queue family does not support present." }
-                    graphicsQueueFamilyIndex = it
-                }
-            }
-        }
+        val graphicsQueueFamilyIndex = physicalDevice.chooseGraphicsQueue(surface)
 
         println("Queue Family: $graphicsQueueFamilyIndex")
 
@@ -120,7 +102,7 @@ fun main() {
             pQueuePriorities = queuePriority.ptr()
         }
         val deviceExtensions = setOf(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
-        val deviceCreateInfo = VkDeviceCreateInfo.allocate().apply {
+        val deviceCreateInfo = VkDeviceCreateInfo.allocate {
             pQueueCreateInfos = queueCreateInfos.ptr()
             queueCreateInfoCount = 1u
 
@@ -155,7 +137,7 @@ fun main() {
         println("Using swapchain present mode: $presentMode")
         val swapchainExtent = chooseSwapchainExtent(window, swapchainSupport.capabilities)
 
-        val swapchainCreateInfo = VkSwapchainCreateInfoKHR.allocate().apply {
+        val swapchainCreateInfo = VkSwapchainCreateInfoKHR.allocate {
             this.surface = surface
             minImageCount = swapchainSupport.capabilities.minImageCount
             imageFormat = surfaceFormat.format
@@ -187,7 +169,7 @@ fun main() {
 
         val swapchainImageViews = buildList {
             repeat(swapchainImageCount.value.toInt()) {
-                val createInfo = VkImageViewCreateInfo.allocate().apply {
+                val createInfo = VkImageViewCreateInfo.allocate {
                     image = swapchainImages[it]
                     viewType = VkImageViewType.`2D`
                     format = swapchainImageFormat
@@ -205,183 +187,20 @@ fun main() {
             }
         }
 
-        fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
-            val codeBuffer = NInt8.malloc(code.size)
-            codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
-            val createInfo = VkShaderModuleCreateInfo.allocate().apply {
-                codeSize = code.size.toLong()
-                pCode = reinterpretCast(codeBuffer.ptr())
-            }
-            return createShaderModule(createInfo.ptr(), null).getOrThrow()
-        }
-
         val vktestSpvData = VkTest::class.java.getResource("/vktest.spv")!!.readBytes()
         val vkTestShaderModule = device.makeShaderModule(vktestSpvData)
 
-        val shaderStages = VkPipelineShaderStageCreateInfo.allocate(2)
-        shaderStages[0].apply {
-            stage = VkShaderStageFlags.VERTEX
-            module = vkTestShaderModule
-            pName = "vertexMain".c_str()
-        }
-        shaderStages[1].apply {
-            stage = VkShaderStageFlags.FRAGMENT
-            module = vkTestShaderModule
-            pName = "fragmentMain".c_str()
-        }
-
-        val vertexInputStateCreateInfo = VkPipelineVertexInputStateCreateInfo.allocate().apply {
-            vertexBindingDescriptionCount = 0u
-            pVertexBindingDescriptions = nullptr()
-            vertexAttributeDescriptionCount = 0u
-            pVertexAttributeDescriptions = nullptr()
-        }
-
-        val inputAssemblyStateCreateInfo = VkPipelineInputAssemblyStateCreateInfo.allocate().apply {
-            topology = VkPrimitiveTopology.TRIANGLE_LIST
-            primitiveRestartEnable = 0u
-        }
-
-        val viewport = VkViewport.allocate()
-        viewport.x = 0.0f
-        viewport.y = 0.0f
-        viewport.width = swapchainExtent.width.toFloat()
-        viewport.height = swapchainExtent.height.toFloat()
-        viewport.minDepth = 0.0f
-        viewport.maxDepth = 1.0f
-
-        val scissor = VkRect2D.allocate()
-        scissor.offset.x = 0
-        scissor.offset.y = 0
-        scissor.extent = swapchainExtent
-
-        val viewportStateCreateInfo = VkPipelineViewportStateCreateInfo.allocate().apply {
-            viewportCount = 1u
-            pViewports = viewport.ptr()
-            scissorCount = 1u
-            pScissors = scissor.ptr()
-        }
-
-        val rasterizationStateCreateInfo = VkPipelineRasterizationStateCreateInfo.allocate().apply {
-            depthClampEnable = VK_FALSE
-            rasterizerDiscardEnable = VK_FALSE
-            polygonMode = VkPolygonMode.FILL
-            lineWidth = 1f
-            cullMode = VkCullModeFlags.NONE
-            frontFace = VkFrontFace.CLOCKWISE
-            depthBiasEnable = VK_FALSE
-            depthBiasConstantFactor = 0.0f // Optional
-            depthBiasClamp = 0.0f // Optional
-            depthBiasSlopeFactor = 0.0f // Optional
-        }
-
-        val multisampleStateCreateInfo = VkPipelineMultisampleStateCreateInfo.allocate().apply {
-            sampleShadingEnable = VK_FALSE
-            rasterizationSamples = VkSampleCountFlags.`1_BIT`
-            minSampleShading = 1.0f // Optional
-            pSampleMask = nullptr() // Optional
-            alphaToCoverageEnable = VK_FALSE // Optional
-            alphaToOneEnable = VK_FALSE // Optional
-        }
-
-        val colorBlendAttachmentState = VkPipelineColorBlendAttachmentState.allocate().apply {
-            colorWriteMask =
-                VkColorComponentFlags.R + VkColorComponentFlags.G + VkColorComponentFlags.B + VkColorComponentFlags.A
-            blendEnable = VK_FALSE
-            srcColorBlendFactor = VkBlendFactor.ONE // Optional
-            dstColorBlendFactor = VkBlendFactor.ZERO // Optional
-            colorBlendOp = VkBlendOp.ADD // Optional
-            srcAlphaBlendFactor = VkBlendFactor.ONE // Optional
-            dstAlphaBlendFactor = VkBlendFactor.ZERO // Optional
-            alphaBlendOp = VkBlendOp.ADD // Optional
-        }
-
-        val colorBlendState = VkPipelineColorBlendStateCreateInfo.allocate().apply {
-            logicOpEnable = VK_FALSE
-            logicOp = VkLogicOp.COPY // Optional
-            attachmentCount = 1u
-            pAttachments = colorBlendAttachmentState.ptr()
-            blendConstants[0] = 0.0f // Optional
-            blendConstants[1] = 0.0f // Optional
-            blendConstants[2] = 0.0f // Optional
-            blendConstants[3] = 0.0f // Optional
-        }
-
-        val pipelineLayoutCreateInfo = VkPipelineLayoutCreateInfo.allocate().apply {
-            setLayoutCount = 0u // Optional
-            pSetLayouts = nullptr() // Optional
-            pushConstantRangeCount = 0u // Optional
-            pPushConstantRanges = nullptr() // Optional
-        }
-
-        val pipelineLayout = device.createPipelineLayout(pipelineLayoutCreateInfo.ptr(), null).getOrThrow()
-
-        val colorAttachment = VkAttachmentDescription.allocate().apply {
-            format = swapchainImageFormat
-            samples = VkSampleCountFlags.`1_BIT`
-            loadOp = VkAttachmentLoadOp.CLEAR
-            storeOp = VkAttachmentStoreOp.STORE
-            stencilLoadOp = VkAttachmentLoadOp.DONT_CARE
-            stencilStoreOp = VkAttachmentStoreOp.DONT_CARE
-            initialLayout = VkImageLayout.UNDEFINED
-            finalLayout = VkImageLayout.PRESENT_SRC_KHR
-        }
-
-        val colorAttachmentRef = VkAttachmentReference.allocate().apply {
-            attachment = 0u
-            layout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL
-        }
-
-        val subpass = VkSubpassDescription.allocate().apply {
-            pipelineBindPoint = VkPipelineBindPoint.GRAPHICS
-            colorAttachmentCount = 1u
-            pColorAttachments = colorAttachmentRef.ptr()
-        }
-
-        val subpassDependency = VkSubpassDependency.allocate().apply {
-            srcSubpass = VK_SUBPASS_EXTERNAL
-            dstSubpass = 0u
-            srcStageMask = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
-            srcAccessMask = VkAccessFlags.NONE
-            dstStageMask = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
-            dstAccessMask = VkAccessFlags.COLOR_ATTACHMENT_WRITE
-        }
-
-        val renderPassCreateInfo = VkRenderPassCreateInfo.allocate().apply {
-            attachmentCount = 1u
-            pAttachments = colorAttachment.ptr()
-            subpassCount = 1u
-            pSubpasses = subpass.ptr()
-            dependencyCount = 1u
-            pDependencies = subpassDependency.ptr()
-        }
-
-        val renderPass = device.createRenderPass(renderPassCreateInfo.ptr(), null).getOrThrow()
-
-        val pipelineCreateInfo = VkGraphicsPipelineCreateInfo.allocate().apply {
-            stageCount = 2u
-            pStages = shaderStages.ptr()
-            pVertexInputState = vertexInputStateCreateInfo.ptr()
-            pInputAssemblyState = inputAssemblyStateCreateInfo.ptr()
-            pViewportState = viewportStateCreateInfo.ptr()
-            pRasterizationState = rasterizationStateCreateInfo.ptr()
-            pMultisampleState = multisampleStateCreateInfo.ptr()
-            pDepthStencilState = nullptr()
-            pColorBlendState = colorBlendState.ptr()
-            pDynamicState = nullptr()
-            layout = pipelineLayout
-            this.renderPass = renderPass
-            this.subpass = 0u
-        }
-
-        val pipeline = device.createGraphicsPipelines(
-            VkPipelineCache.fromNativeData(device, 0L), 1u, pipelineCreateInfo.ptr(), null
-        ).getOrThrow()
+        val (pipelineLayout, renderPass, pipeline) = makePipeline(
+            vkTestShaderModule,
+            swapchainExtent,
+            device,
+            swapchainImageFormat
+        )
 
         val swapchainFramebuffers = buildList {
             repeat(swapchainImageViews.size) {
                 val attachments = VkImageView.valueOf(swapchainImageViews[it])
-                val framebufferCreateInfo = VkFramebufferCreateInfo.allocate().apply {
+                val framebufferCreateInfo = VkFramebufferCreateInfo.allocate {
                     this.renderPass = renderPass
                     attachmentCount = 1u
                     pAttachments = attachments.ptr()
@@ -393,21 +212,21 @@ fun main() {
             }
         }
 
-        val commandPoolCreateInfo = VkCommandPoolCreateInfo.allocate().apply {
+        val commandPoolCreateInfo = VkCommandPoolCreateInfo.allocate {
             flags = VkCommandPoolCreateFlags.RESET_COMMAND_BUFFER
             queueFamilyIndex = graphicsQueueFamilyIndex.toUInt()
         }
 
         val commandPool = device.createCommandPool(commandPoolCreateInfo.ptr(), null).getOrThrow()
 
-        val commandBufferAllocateInfo = VkCommandBufferAllocateInfo.allocate().apply {
+        val commandBufferAllocateInfo = VkCommandBufferAllocateInfo.allocate {
             this.commandPool = commandPool
             level = VkCommandBufferLevel.PRIMARY
             commandBufferCount = 1u
         }
-        val semaphoreCreateInfo = VkSemaphoreCreateInfo.allocate().apply {}
+        val semaphoreCreateInfo = VkSemaphoreCreateInfo.allocate {}
 
-        val fenceCreateInfo = VkFenceCreateInfo.allocate().apply {
+        val fenceCreateInfo = VkFenceCreateInfo.allocate {
             flags = VkFenceCreateFlags.SIGNALED
         }
 
@@ -454,10 +273,10 @@ fun main() {
                 commandBuffer.resetCommandBuffer(VkCommandBufferResetFlags.NONE)
 
                 val imageIndex = pImageIndex.value.toInt()
-                val beginInfo = VkCommandBufferBeginInfo.allocate().apply {}
+                val beginInfo = VkCommandBufferBeginInfo.allocate {}
                 commandBuffer.beginCommandBuffer(beginInfo.ptr())
 
-                val renderPassInfo = VkRenderPassBeginInfo.allocate().apply {
+                val renderPassInfo = VkRenderPassBeginInfo.allocate {
                     this.renderPass = renderPass
                     this.framebuffer = swapchainFramebuffers[imageIndex]
                     renderArea.offset.apply {
@@ -480,7 +299,7 @@ fun main() {
                 val waitStages = VkPipelineStageFlags.malloc(1).apply {
                     this[0] = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
                 }
-                val submitInfo = VkSubmitInfo.allocate().apply {
+                val submitInfo = VkSubmitInfo.allocate {
                     waitSemaphoreCount = 1u
                     pWaitSemaphores = pImageAvailableSemaphore.ptr()
 
@@ -498,7 +317,7 @@ fun main() {
                     inFlightFence
                 )
 
-                val presentInfo = VkPresentInfoKHR.allocate().apply {
+                val presentInfo = VkPresentInfoKHR.allocate {
                     waitSemaphoreCount = 1u
                     pWaitSemaphores = pRenderFinishedSemaphore.ptr()
 
@@ -561,3 +380,176 @@ fun main() {
         glfwTerminate()
     }
 }
+
+context(_: MemoryStack.Frame)
+@OptIn(UnsafeAPI::class)
+private fun makePipeline(
+    vkTestShaderModule: VkShaderModule,
+    swapchainExtent: NPointer<VkExtent2D>,
+    device: VkDevice,
+    swapchainImageFormat: VkFormat
+): Triple<VkPipelineLayout, VkRenderPass, VkPipeline> {
+    MemoryStack {
+        val shaderStages = VkPipelineShaderStageCreateInfo.allocate(2)
+        shaderStages[0].apply {
+            stage = VkShaderStageFlags.VERTEX
+            module = vkTestShaderModule
+            pName = "vertexMain".c_str()
+        }
+        shaderStages[1].apply {
+            stage = VkShaderStageFlags.FRAGMENT
+            module = vkTestShaderModule
+            pName = "fragmentMain".c_str()
+        }
+
+        val vertexInputStateCreateInfo = VkPipelineVertexInputStateCreateInfo.allocate {
+            vertexBindingDescriptionCount = 0u
+            pVertexBindingDescriptions = nullptr()
+            vertexAttributeDescriptionCount = 0u
+            pVertexAttributeDescriptions = nullptr()
+        }
+
+        val inputAssemblyStateCreateInfo = VkPipelineInputAssemblyStateCreateInfo.allocate {
+            topology = VkPrimitiveTopology.TRIANGLE_LIST
+            primitiveRestartEnable = 0u
+        }
+
+        val viewport = VkViewport.allocate()
+        viewport.x = 0.0f
+        viewport.y = 0.0f
+        viewport.width = swapchainExtent.width.toFloat()
+        viewport.height = swapchainExtent.height.toFloat()
+        viewport.minDepth = 0.0f
+        viewport.maxDepth = 1.0f
+
+        val scissor = VkRect2D.allocate()
+        scissor.offset.x = 0
+        scissor.offset.y = 0
+        scissor.extent = swapchainExtent
+
+        val viewportStateCreateInfo = VkPipelineViewportStateCreateInfo.allocate {
+            viewportCount = 1u
+            pViewports = viewport.ptr()
+            scissorCount = 1u
+            pScissors = scissor.ptr()
+        }
+
+        val rasterizationStateCreateInfo = VkPipelineRasterizationStateCreateInfo.allocate {
+            depthClampEnable = VK_FALSE
+            rasterizerDiscardEnable = VK_FALSE
+            polygonMode = VkPolygonMode.FILL
+            lineWidth = 1f
+            cullMode = VkCullModeFlags.NONE
+            frontFace = VkFrontFace.CLOCKWISE
+            depthBiasEnable = VK_FALSE
+            depthBiasConstantFactor = 0.0f // Optional
+            depthBiasClamp = 0.0f // Optional
+            depthBiasSlopeFactor = 0.0f // Optional
+        }
+
+        val multisampleStateCreateInfo = VkPipelineMultisampleStateCreateInfo.allocate {
+            sampleShadingEnable = VK_FALSE
+            rasterizationSamples = VkSampleCountFlags.`1_BIT`
+            minSampleShading = 1.0f // Optional
+            pSampleMask = nullptr() // Optional
+            alphaToCoverageEnable = VK_FALSE // Optional
+            alphaToOneEnable = VK_FALSE // Optional
+        }
+
+        val colorBlendAttachmentState = VkPipelineColorBlendAttachmentState.allocate {
+            colorWriteMask =
+                VkColorComponentFlags.R + VkColorComponentFlags.G + VkColorComponentFlags.B + VkColorComponentFlags.A
+            blendEnable = VK_FALSE
+            srcColorBlendFactor = VkBlendFactor.ONE // Optional
+            dstColorBlendFactor = VkBlendFactor.ZERO // Optional
+            colorBlendOp = VkBlendOp.ADD // Optional
+            srcAlphaBlendFactor = VkBlendFactor.ONE // Optional
+            dstAlphaBlendFactor = VkBlendFactor.ZERO // Optional
+            alphaBlendOp = VkBlendOp.ADD // Optional
+        }
+
+        val colorBlendState = VkPipelineColorBlendStateCreateInfo.allocate {
+            logicOpEnable = VK_FALSE
+            logicOp = VkLogicOp.COPY // Optional
+            attachmentCount = 1u
+            pAttachments = colorBlendAttachmentState.ptr()
+            blendConstants[0] = 0.0f // Optional
+            blendConstants[1] = 0.0f // Optional
+            blendConstants[2] = 0.0f // Optional
+            blendConstants[3] = 0.0f // Optional
+        }
+
+        val pipelineLayoutCreateInfo = VkPipelineLayoutCreateInfo.allocate {
+            setLayoutCount = 0u // Optional
+            pSetLayouts = nullptr() // Optional
+            pushConstantRangeCount = 0u // Optional
+            pPushConstantRanges = nullptr() // Optional
+        }
+
+        val pipelineLayout = device.createPipelineLayout(pipelineLayoutCreateInfo.ptr(), null).getOrThrow()
+
+        val colorAttachment = VkAttachmentDescription.allocate {
+            format = swapchainImageFormat
+            samples = VkSampleCountFlags.`1_BIT`
+            loadOp = VkAttachmentLoadOp.CLEAR
+            storeOp = VkAttachmentStoreOp.STORE
+            stencilLoadOp = VkAttachmentLoadOp.DONT_CARE
+            stencilStoreOp = VkAttachmentStoreOp.DONT_CARE
+            initialLayout = VkImageLayout.UNDEFINED
+            finalLayout = VkImageLayout.PRESENT_SRC_KHR
+        }
+
+        val colorAttachmentRef = VkAttachmentReference.allocate {
+            attachment = 0u
+            layout = VkImageLayout.COLOR_ATTACHMENT_OPTIMAL
+        }
+
+        val subpass = VkSubpassDescription.allocate {
+            pipelineBindPoint = VkPipelineBindPoint.GRAPHICS
+            colorAttachmentCount = 1u
+            pColorAttachments = colorAttachmentRef.ptr()
+        }
+
+        val subpassDependency = VkSubpassDependency.allocate {
+            srcSubpass = VK_SUBPASS_EXTERNAL
+            dstSubpass = 0u
+            srcStageMask = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
+            srcAccessMask = VkAccessFlags.NONE
+            dstStageMask = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
+            dstAccessMask = VkAccessFlags.COLOR_ATTACHMENT_WRITE
+        }
+
+        val renderPassCreateInfo = VkRenderPassCreateInfo.allocate {
+            attachmentCount = 1u
+            pAttachments = colorAttachment.ptr()
+            subpassCount = 1u
+            pSubpasses = subpass.ptr()
+            dependencyCount = 1u
+            pDependencies = subpassDependency.ptr()
+        }
+
+        val renderPass = device.createRenderPass(renderPassCreateInfo.ptr(), null).getOrThrow()
+
+        val pipelineCreateInfo = VkGraphicsPipelineCreateInfo.allocate {
+            stageCount = 2u
+            pStages = shaderStages.ptr()
+            pVertexInputState = vertexInputStateCreateInfo.ptr()
+            pInputAssemblyState = inputAssemblyStateCreateInfo.ptr()
+            pViewportState = viewportStateCreateInfo.ptr()
+            pRasterizationState = rasterizationStateCreateInfo.ptr()
+            pMultisampleState = multisampleStateCreateInfo.ptr()
+            pDepthStencilState = nullptr()
+            pColorBlendState = colorBlendState.ptr()
+            pDynamicState = nullptr()
+            layout = pipelineLayout
+            this.renderPass = renderPass
+            this.subpass = 0u
+        }
+
+        val pipeline = device.createGraphicsPipelines(
+            VkPipelineCache.fromNativeData(device, 0L), 1u, pipelineCreateInfo.ptr(), null
+        ).getOrThrow()
+        return Triple(pipelineLayout, renderPass, pipeline)
+    }
+}
+

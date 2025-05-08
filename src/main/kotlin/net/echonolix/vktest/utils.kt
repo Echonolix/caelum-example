@@ -10,11 +10,16 @@ import net.echonolix.caelum.vulkan.enums.VkPresentModeKHR
 import net.echonolix.caelum.vulkan.enums.get
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageSeverityFlagsEXT
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageTypeFlagsEXT
+import net.echonolix.caelum.vulkan.flags.VkQueueFlags
+import net.echonolix.caelum.vulkan.handles.VkDevice
 import net.echonolix.caelum.vulkan.handles.VkInstance
 import net.echonolix.caelum.vulkan.handles.VkPhysicalDevice
+import net.echonolix.caelum.vulkan.handles.VkShaderModule
 import net.echonolix.caelum.vulkan.handles.VkSurfaceKHR
 import net.echonolix.caelum.vulkan.handles.get
 import net.echonolix.caelum.vulkan.structs.*
+import net.echonolix.caelum.vulkan.structs.get
+import java.lang.foreign.MemorySegment
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -77,7 +82,7 @@ fun chooseSwapchainExtent(
         val heightBuffer = NInt.malloc()
         glfwGetWindowSize(window, widthBuffer.ptr(), heightBuffer.ptr())
 
-        val actualExtent = VkExtent2D.allocate().apply {
+        val actualExtent = VkExtent2D.allocate {
             this.width = widthBuffer.value.toUInt()
                 .coerceIn(capabilities.minImageExtent.width, capabilities.maxImageExtent.width)
             this.height = heightBuffer.value.toUInt()
@@ -137,4 +142,42 @@ fun MemoryStack.Frame.choosePhysicalDevice(instance: VkInstance): VkPhysicalDevi
                 }
             }
         )?.first ?: error("No suitable physical device found.")
+}
+
+context(_: MemoryStack.Frame)
+@OptIn(UnsafeAPI::class)
+fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
+    MemoryStack {
+        val codeBuffer = NInt8.malloc(code.size)
+        codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
+        val createInfo = VkShaderModuleCreateInfo.allocate {
+            codeSize = code.size.toLong()
+            pCode = reinterpretCast(codeBuffer.ptr())
+        }
+        return createShaderModule(createInfo.ptr(), null).getOrThrow()
+    }
+}
+
+context(_: MemoryStack.Frame)
+fun VkPhysicalDevice.chooseGraphicsQueue(surface: VkSurfaceKHR): Int {
+    var graphicsQueueFamilyIndex = -1
+    MemoryStack {
+        val queueFamilyPropertyCount = NUInt32.calloc()
+        this@chooseGraphicsQueue.getPhysicalDeviceQueueFamilyProperties(queueFamilyPropertyCount.ptr(), null)
+        val queueFamilyProperties = VkQueueFamilyProperties.allocate(queueFamilyPropertyCount.value)
+        this@chooseGraphicsQueue.getPhysicalDeviceQueueFamilyProperties(
+            queueFamilyPropertyCount.ptr(),
+            queueFamilyProperties.ptr()
+        )
+        val isPresentSupported = NUInt32.malloc()
+        repeat(queueFamilyPropertyCount.value.toInt()) {
+            val queueFamilyProperty = queueFamilyProperties[it.toLong()]
+            if (graphicsQueueFamilyIndex == -1 && queueFamilyProperty.queueFlags.contains(VkQueueFlags.Companion.GRAPHICS)) {
+                this@chooseGraphicsQueue.getPhysicalDeviceSurfaceSupportKHR(it.toUInt(), surface, isPresentSupported.ptr())
+                check(isPresentSupported.value == 1u) { "Graphics queue family does not support present." }
+                graphicsQueueFamilyIndex = it
+            }
+        }
+    }
+    return graphicsQueueFamilyIndex
 }
