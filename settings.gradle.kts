@@ -1,4 +1,9 @@
 pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenLocal()
+    }
+
     includeBuild("../slang-gradle-plugin")
 
     plugins {

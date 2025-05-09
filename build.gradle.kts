@@ -11,6 +11,7 @@ allprojects {
 plugins {
     kotlin("jvm")
     id("net.echonolix.slang-gradle-plugin")
+    id("dev.luna5ama.jar-optimizer") version "1.2.2"
 }
 
 dependencies {
@@ -35,4 +36,26 @@ slang {
         debug.set(true)
         extraOptions.add("-fvk-use-entrypoint-name")
     }
+}
+
+val fatJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("fat")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(sourceSets.main.get().output)
+}
+
+project.afterEvaluate {
+    fatJar.configure {
+        from(configurations.runtimeClasspath.get().elements.get().map { fileSystemLocation ->
+            fileSystemLocation.asFile.let {
+                if (it.isDirectory) it else this.project.zipTree(it)
+            }
+        })
+    }
+}
+
+val optimizeFatJar = jarOptimizer.register(fatJar, "dev.luna5ama.echonolix")
+
+artifacts {
+    archives(optimizeFatJar)
 }
