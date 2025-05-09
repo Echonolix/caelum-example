@@ -42,6 +42,12 @@ val fatJar by tasks.registering(Jar::class) {
     archiveClassifier.set("fat")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(sourceSets.main.get().output)
+
+    manifest {
+        attributes(
+            "Main-Class" to "net.echonolix.vktest.VkTestKt",
+        )
+    }
 }
 
 project.afterEvaluate {
@@ -54,7 +60,7 @@ project.afterEvaluate {
     }
 }
 
-val optimizeFatJar = jarOptimizer.register(fatJar, "dev.luna5ama.echonolix")
+val optimizeFatJar = jarOptimizer.register(fatJar, "net.echonolix.vktest")
 
 artifacts {
     archives(optimizeFatJar)

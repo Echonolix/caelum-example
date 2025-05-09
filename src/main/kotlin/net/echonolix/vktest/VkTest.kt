@@ -17,7 +17,7 @@ import net.echonolix.caelum.vulkan.unions.float32
 import net.echonolix.vktest.utils.AverageCounter
 import java.lang.foreign.MemorySegment
 
-class VkTest
+class VkTestS
 
 @OptIn(UnsafeAPI::class)
 fun main() {
@@ -187,7 +187,7 @@ fun main() {
             }
         }
 
-        val vktestSpvData = VkTest::class.java.getResource("/vktest.spv")!!.readBytes()
+        val vktestSpvData = VkTestS::class.java.getResource("/vktest.spv")!!.readBytes()
         val vkTestShaderModule = device.makeShaderModule(vktestSpvData)
 
         val (pipelineLayout, renderPass, pipeline) = makePipeline(
