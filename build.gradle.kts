@@ -11,6 +11,7 @@ allprojects {
 plugins {
     kotlin("jvm")
     id("net.echonolix.slang-gradle-plugin")
+    id("net.echonolix.caelum-struct") version "1.0-SNAPSHOT"
     id("dev.luna5ama.jar-optimizer") version "1.2.2"
 }
 
@@ -22,6 +23,9 @@ dependencies {
 
 java {
     withSourcesJar()
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(23))
+    }
 }
 
 kotlin {
