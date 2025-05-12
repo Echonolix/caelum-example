@@ -9,4 +9,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "vktest"
+rootProject.name = "caelum-example"
