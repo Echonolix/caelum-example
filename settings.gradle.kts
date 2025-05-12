@@ -4,8 +4,6 @@ pluginManagement {
         mavenLocal()
     }
 
-    includeBuild("../slang-gradle-plugin")
-
     plugins {
         id("org.jetbrains.kotlin.jvm") version "2.1.20"
     }

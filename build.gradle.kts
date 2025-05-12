@@ -10,7 +10,7 @@ allprojects {
 
 plugins {
     kotlin("jvm")
-    id("net.echonolix.slang-gradle-plugin")
+    id("net.echonolix.slang-gradle-plugin") version "0.0.1"
     id("net.echonolix.caelum-struct") version "1.0-SNAPSHOT"
     id("dev.luna5ama.jar-optimizer") version "1.2.2"
 }
@@ -35,12 +35,12 @@ kotlin {
     }
 }
 
-slang {
-    compilerOptions {
-        debug.set(true)
-        extraOptions.add("-fvk-use-entrypoint-name")
-    }
-}
+//slang {
+//    compilerOptions {
+//        debug.set(true)
+//        extraOptions.add("-fvk-use-entrypoint-name")
+//    }
+//}
 
 val fatJar by tasks.registering(Jar::class) {
     archiveClassifier.set("fat")
@@ -58,7 +58,7 @@ project.afterEvaluate {
     fatJar.configure {
         from(configurations.runtimeClasspath.get().elements.get().map { fileSystemLocation ->
             fileSystemLocation.asFile.let {
-                if (it.isDirectory) it else this.project.zipTree(it)
+                if (it.isDirectory || !it.exists()) it else this.project.zipTree(it)
             }
         })
     }

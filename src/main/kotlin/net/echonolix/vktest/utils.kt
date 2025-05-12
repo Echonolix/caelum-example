@@ -11,14 +11,8 @@ import net.echonolix.caelum.vulkan.enums.get
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageSeverityFlagsEXT
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageTypeFlagsEXT
 import net.echonolix.caelum.vulkan.flags.VkQueueFlags
-import net.echonolix.caelum.vulkan.handles.VkDevice
-import net.echonolix.caelum.vulkan.handles.VkInstance
-import net.echonolix.caelum.vulkan.handles.VkPhysicalDevice
-import net.echonolix.caelum.vulkan.handles.VkShaderModule
-import net.echonolix.caelum.vulkan.handles.VkSurfaceKHR
-import net.echonolix.caelum.vulkan.handles.get
+import net.echonolix.caelum.vulkan.handles.*
 import net.echonolix.caelum.vulkan.structs.*
-import net.echonolix.caelum.vulkan.structs.get
 import java.lang.foreign.MemorySegment
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
@@ -152,7 +146,7 @@ fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
         codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
         val createInfo = VkShaderModuleCreateInfo.allocate {
             codeSize = code.size.toLong()
-            pCode = reinterpretCast(codeBuffer.ptr())
+            pCode = reinterpret_cast(codeBuffer.ptr())
         }
         return createShaderModule(createInfo.ptr(), null).getOrThrow()
     }

@@ -11,15 +11,11 @@ import net.echonolix.caelum.vulkan.enums.*
 import net.echonolix.caelum.vulkan.flags.*
 import net.echonolix.caelum.vulkan.handles.*
 import net.echonolix.caelum.vulkan.structs.*
-import net.echonolix.caelum.vulkan.unions.VkClearValue
-import net.echonolix.caelum.vulkan.unions.color
-import net.echonolix.caelum.vulkan.unions.float32
+import net.echonolix.caelum.vulkan.unions.*
 import net.echonolix.vktest.utils.AverageCounter
-import java.lang.foreign.MemorySegment
 
 class VkTestS
 
-@OptIn(UnsafeAPI::class)
 fun main() {
     loadLibrary("glfw3")
 
@@ -62,10 +58,8 @@ fun main() {
 
         val createInfo = VkInstanceCreateInfo.allocate {
             pApplicationInfo = appInfo.ptr()
-            ppEnabledExtensionNames = extensions.c_strs()
-            enabledExtensionCount = extensions.size.toUInt()
-            ppEnabledLayerNames = layers.c_strs()
-            enabledLayerCount = layers.size.toUInt()
+            enabledExtensions(extensions.c_strs())
+            enabledLayers(layers.c_strs())
             pNext = if (useValidationLayer) {
                 debugCreateInfo.ptr()
             } else {
@@ -94,25 +88,20 @@ fun main() {
 
         println("Queue Family: $graphicsQueueFamilyIndex")
 
-        val queuePriority = NFloat.calloc().apply { value = 1f }
+        val queuePriority = NFloat.arrayOf(1.0f)
         val queueCreateInfos = VkDeviceQueueCreateInfo.allocate(1)
         queueCreateInfos[0].apply {
             queueFamilyIndex = graphicsQueueFamilyIndex.toUInt()
-            queueCount = 1u
-            pQueuePriorities = queuePriority.ptr()
+            queues(queuePriority)
         }
         val deviceExtensions = setOf(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
         val deviceCreateInfo = VkDeviceCreateInfo.allocate {
-            pQueueCreateInfos = queueCreateInfos.ptr()
-            queueCreateInfoCount = 1u
+            queueCreateInfoes(queueCreateInfos)
 
             pEnabledFeatures = physicalDeviceFeatures.ptr()
 
-            enabledExtensionCount = deviceExtensions.size.toUInt()
-            ppEnabledExtensionNames = deviceExtensions.c_strs()
-
-            enabledLayerCount = layers.size.toUInt()
-            ppEnabledLayerNames = layers.c_strs()
+            enabledExtensions(deviceExtensions.c_strs())
+            enabledLayers(layers.c_strs())
         }
         val device = physicalDevice.createDevice(deviceCreateInfo.ptr(), null).getOrThrow()
         val graphicsQueueV = VkQueue.malloc()
@@ -199,11 +188,9 @@ fun main() {
 
         val swapchainFramebuffers = buildList {
             repeat(swapchainImageViews.size) {
-                val attachments = VkImageView.valueOf(swapchainImageViews[it])
                 val framebufferCreateInfo = VkFramebufferCreateInfo.allocate {
                     this.renderPass = renderPass
-                    attachmentCount = 1u
-                    pAttachments = attachments.ptr()
+                    attachments(VkImageView.arrayOf(swapchainImageViews[it]))
                     this.width = swapchainExtent.width
                     this.height = swapchainExtent.height
                     this.layers = 1u
@@ -230,7 +217,8 @@ fun main() {
             flags = VkFenceCreateFlags.SIGNALED
         }
 
-        val clearColor = VkClearValue.malloc().apply {
+        val clearColor = VkClearValue.malloc(1)
+        clearColor[0].apply {
             color.float32[0] = 0f
             color.float32[1] = 0f
             color.float32[2] = 0f
@@ -238,30 +226,30 @@ fun main() {
         }
 
         class Frame {
-            val pCommandBuffer = VkCommandBuffer.malloc()
+            val pCommandBuffer = VkCommandBuffer.malloc(1)
             val commandBuffer: VkCommandBuffer
 
             init {
                 device.allocateCommandBuffers(commandBufferAllocateInfo.ptr(), pCommandBuffer.ptr())
-                commandBuffer = VkCommandBuffer.fromNativeData(commandPool, pCommandBuffer.value)
+                commandBuffer = VkCommandBuffer.fromNativeData(commandPool, pCommandBuffer[0])
             }
 
             val renderFinishedSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-            val pRenderFinishedSemaphore = VkSemaphore.valueOf(renderFinishedSemaphore)
+            val pRenderFinishedSemaphore = VkSemaphore.arrayOf(renderFinishedSemaphore)
 
             val imageAvailableSemaphore = device.createSemaphore(semaphoreCreateInfo.ptr(), null).getOrThrow()
-            val pImageAvailableSemaphore = VkSemaphore.valueOf(imageAvailableSemaphore)
+            val pImageAvailableSemaphore = VkSemaphore.arrayOf(imageAvailableSemaphore)
 
             val inFlightFence = device.createFence(fenceCreateInfo.ptr(), null).getOrThrow()
 
-            val fences = VkFence.valueOf(inFlightFence)
+            val fences = VkFence.arrayOf(inFlightFence)
 
             context(f: MemoryStack.Frame)
             fun render() {
                 device.waitForFences(1u, fences.ptr(), VK_TRUE, ULong.MAX_VALUE)
                 device.resetFences(1u, fences.ptr())
 
-                val pImageIndex = NUInt32.malloc()
+                val pImageIndex = NUInt32.malloc(1)
                 device.acquireNextImageKHR(
                     swapchain,
                     ULong.MAX_VALUE,
@@ -272,20 +260,19 @@ fun main() {
 
                 commandBuffer.resetCommandBuffer(VkCommandBufferResetFlags.NONE)
 
-                val imageIndex = pImageIndex.value.toInt()
+                val imageIndex = pImageIndex[0].toInt()
                 val beginInfo = VkCommandBufferBeginInfo.allocate {}
                 commandBuffer.beginCommandBuffer(beginInfo.ptr())
 
                 val renderPassInfo = VkRenderPassBeginInfo.allocate {
                     this.renderPass = renderPass
                     this.framebuffer = swapchainFramebuffers[imageIndex]
-                    renderArea.offset.apply {
+                    renderArea.offset {
                         x = 0
                         y = 0
                     }
                     renderArea.extent = swapchainExtent
-                    clearValueCount = 1u
-                    pClearValues = clearColor.ptr()
+                    clearValues(clearColor)
                 }
 
                 commandBuffer.cmdBeginRenderPass(renderPassInfo.ptr(), VkSubpassContents.INLINE)
@@ -296,20 +283,12 @@ fun main() {
                 commandBuffer.cmdEndRenderPass()
                 commandBuffer.endCommandBuffer()
 
-                val waitStages = VkPipelineStageFlags.malloc(1).apply {
-                    this[0] = VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT
-                }
                 val submitInfo = VkSubmitInfo.allocate {
-                    waitSemaphoreCount = 1u
-                    pWaitSemaphores = pImageAvailableSemaphore.ptr()
+                    waitSemaphores(pImageAvailableSemaphore, VkPipelineStageFlags.arrayOf(VkPipelineStageFlags.COLOR_ATTACHMENT_OUTPUT))
 
-                    pWaitDstStageMask = waitStages.ptr()
+                    commandBuffers(static_cast(pCommandBuffer))
 
-                    commandBufferCount = 1u
-                    pCommandBuffers = pCommandBuffer.ptr()
-
-                    signalSemaphoreCount = 1u
-                    pSignalSemaphores = pRenderFinishedSemaphore.ptr()
+                    signalSemaphores(pRenderFinishedSemaphore)
                 }
                 graphicsQueue.queueSubmit(
                     1u,
@@ -318,13 +297,10 @@ fun main() {
                 )
 
                 val presentInfo = VkPresentInfoKHR.allocate {
-                    waitSemaphoreCount = 1u
-                    pWaitSemaphores = pRenderFinishedSemaphore.ptr()
+                    waitSemaphores(pRenderFinishedSemaphore)
 
-                    swapchainCount = 1u
-                    pSwapchains = VkSwapchainKHR.valueOf(swapchain).ptr()
-
-                    pImageIndices = pImageIndex.ptr()
+                    val dummy = VkResult.malloc(1)
+                    swapchains(VkSwapchainKHR.arrayOf(swapchain), pImageIndex, dummy)
                 }
                 graphicsQueue.queuePresentKHR(presentInfo.ptr())
             }
