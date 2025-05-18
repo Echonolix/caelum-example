@@ -1,4 +1,4 @@
-package net.echonolix.vktest.utils
+package net.echonolix.example.utils
 
 class AverageCounter(private val interval: Int, private val slice: Int) {
 

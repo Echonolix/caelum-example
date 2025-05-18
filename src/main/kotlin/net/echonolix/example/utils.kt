@@ -1,4 +1,4 @@
-package net.echonolix.vktest
+package net.echonolix.example
 
 import net.echonolix.caelum.*
 import net.echonolix.caelum.glfw.functions.glfwGetWindowSize

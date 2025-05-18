@@ -1,4 +1,4 @@
-package net.echonolix.vktest.utils
+package net.echonolix.example.utils
 
 @JvmInline
 value class FastTimer(val time: Long = System.currentTimeMillis()) {

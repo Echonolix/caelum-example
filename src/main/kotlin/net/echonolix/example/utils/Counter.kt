@@ -1,4 +1,4 @@
-package net.echonolix.vktest.utils
+package net.echonolix.example.utils
 
 class Counter(val interval: Int) {
 

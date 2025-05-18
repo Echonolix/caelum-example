@@ -1,4 +1,4 @@
-package net.echonolix.vktest.utils
+package net.echonolix.example.utils
 
 enum class Duration(val multiplier: Long) {
     Nanosecond(1),

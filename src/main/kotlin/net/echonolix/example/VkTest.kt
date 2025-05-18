@@ -1,4 +1,4 @@
-package net.echonolix.vktest
+package net.echonolix.example
 
 import net.echonolix.caelum.*
 import net.echonolix.caelum.glfw.consts.GLFW_CLIENT_API
@@ -12,7 +12,7 @@ import net.echonolix.caelum.vulkan.flags.*
 import net.echonolix.caelum.vulkan.handles.*
 import net.echonolix.caelum.vulkan.structs.*
 import net.echonolix.caelum.vulkan.unions.*
-import net.echonolix.vktest.utils.AverageCounter
+import net.echonolix.example.utils.AverageCounter
 
 class VkTestS
 

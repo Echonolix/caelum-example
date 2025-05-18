@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="VkTestKt" type="JetRunConfigurationType">
-    <option name="MAIN_CLASS_NAME" value="net.echonolix.vktest.VkTestKt" />
-    <module name="vktest.main" />
+    <option name="MAIN_CLASS_NAME" value="net.echonolix.example.VkTestKt" />
+    <module name="caelum-example.main" />
     <shortenClasspath name="NONE" />
     <option name="VM_PARAMETERS" value="-Xms1G -Xmx1G -XX:+UnlockExperimentalVMOptions -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch -XX:+UseLargePages --enable-native-access=ALL-UNNAMED" />
     <option name="WORKING_DIRECTORY" value="run" />

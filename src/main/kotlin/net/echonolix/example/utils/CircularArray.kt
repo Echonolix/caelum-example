@@ -1,4 +1,4 @@
-package net.echonolix.vktest.utils
+package net.echonolix.example.utils
 
 @Suppress("UNCHECKED_CAST")
 class CircularArray<T>(val size: Int) {
