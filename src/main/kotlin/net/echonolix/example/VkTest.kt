@@ -244,7 +244,7 @@ fun main() {
 
             val fences = VkFence.arrayOf(inFlightFence)
 
-            context(f: MemoryStack.Frame)
+            context(_: MemoryStack)
             fun render() {
                 device.waitForFences(1u, fences.ptr(), VK_TRUE, ULong.MAX_VALUE)
                 device.resetFences(1u, fences.ptr())
@@ -357,7 +357,7 @@ fun main() {
     }
 }
 
-context(_: MemoryStack.Frame)
+context(_: MemoryStack)
 @OptIn(UnsafeAPI::class)
 private fun makePipeline(
     vkTestShaderModule: VkShaderModule,

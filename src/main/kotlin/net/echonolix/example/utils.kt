@@ -28,7 +28,7 @@ data class SwapchainSupportDetails(
     val presentModes: List<VkPresentModeKHR>
 )
 
-context(_: MemoryStack.Frame)
+context(_: MemoryStack)
 fun VkPhysicalDevice.querySwapchainSupport(surface: VkSurfaceKHR): SwapchainSupportDetails {
     val capabilities = VkSurfaceCapabilitiesKHR.allocate()
     getPhysicalDeviceSurfaceCapabilitiesKHR(surface, capabilities.ptr())
@@ -64,7 +64,7 @@ fun choosePresentMode(modes: List<VkPresentModeKHR>) = modes.find {
     it == VkPresentModeKHR.IMMEDIATE_KHR
 } ?: VkPresentModeKHR.FIFO_KHR
 
-context(_: MemoryStack.Frame)
+context(_: MemoryStack)
 fun chooseSwapchainExtent(
     window: NPointer<GLFWWindow>,
     capabilities: NValue<VkSurfaceCapabilitiesKHR>
@@ -106,7 +106,7 @@ fun populateDebugMessengerCreateInfo(debugCreateInfo: NValue<VkDebugUtilsMesseng
     }
 }
 
-fun MemoryStack.Frame.choosePhysicalDevice(instance: VkInstance): VkPhysicalDevice = MemoryStack {
+fun MemoryStack.choosePhysicalDevice(instance: VkInstance): VkPhysicalDevice = MemoryStack {
     enumerate(instance::enumeratePhysicalDevices) { pointer, index ->
         VkPhysicalDevice.fromNativeData(
             instance,
@@ -138,7 +138,7 @@ fun MemoryStack.Frame.choosePhysicalDevice(instance: VkInstance): VkPhysicalDevi
         )?.first ?: error("No suitable physical device found.")
 }
 
-context(_: MemoryStack.Frame)
+context(_: MemoryStack)
 @OptIn(UnsafeAPI::class)
 fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
     MemoryStack {
@@ -152,7 +152,7 @@ fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
     }
 }
 
-context(_: MemoryStack.Frame)
+context(_: MemoryStack)
 fun VkPhysicalDevice.chooseGraphicsQueue(surface: VkSurfaceKHR): Int {
     var graphicsQueueFamilyIndex = -1
     MemoryStack {
