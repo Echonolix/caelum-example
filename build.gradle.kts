@@ -16,7 +16,7 @@ plugins {
     id("me.champeau.jmh") version "0.7.3"
 }
 jmh {
-    includes.add("Device")
+    includes.add("VkCreateInfo")
     jvmArgs.set(listOf("-Dfile.encoding=UTF-8", "--enable-native-access=ALL-UNNAMED"))
     javaToolchains {
         jvm.set(launcherFor {

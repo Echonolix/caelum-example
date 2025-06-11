@@ -14,12 +14,65 @@ import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageTypeFlagsEXT
 import net.echonolix.caelum.vulkan.handles.VkPhysicalDevice
 import net.echonolix.caelum.vulkan.handles.get
 import net.echonolix.caelum.vulkan.structs.*
+import net.echonolix.caelum.vulkan.structs.allocate
 import org.openjdk.jmh.infra.Blackhole
+import java.lang.foreign.Arena
+
+private val layers = setOf("VK_LAYER_KHRONOS_validation")
+private val extensions = setOf("VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_utils")
+private val arena = Arena.ofAuto()
+private val cStrHelloVk = "Hello Vulkan".c_str(arena)
+private val cStrVkTest = "VK Test".c_str(arena)
+private val cStrExtensions = extensions.c_strs(arena)
+private val cStrLayers = layers.c_strs(arena)
+
+fun main() {
+    val blackhole = Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.")
+    repeat(10) {
+        repeat(1_000_000_000) {
+            CaelumCreateInfo.run(blackhole)
+        }
+    }
+}
+
+object CaelumCreateInfo {
+    val appInfo = VkApplicationInfo.allocate(arena)
+    val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.allocate(arena)
+    val createInfo = VkInstanceCreateInfo.allocate(arena)
+
+    fun run(blackhole: Blackhole) = MemoryStack {
+        appInfo.apply {
+            pApplicationName = cStrHelloVk
+            applicationVersion = VkApiVersion(0u, 1u, 0u, 0u).value
+            pEngineName = cStrVkTest
+            engineVersion = VkApiVersion(0u, 1u, 0u, 0u).value
+            apiVersion = VK_API_VERSION_1_0.value
+        }
+
+        debugCreateInfo.apply {
+            messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VERBOSE_EXT +
+                VkDebugUtilsMessageSeverityFlagsEXT.WARNING_EXT +
+                VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT
+
+            messageType = VkDebugUtilsMessageTypeFlagsEXT.GENERAL_EXT +
+                VkDebugUtilsMessageTypeFlagsEXT.VALIDATION_EXT +
+                VkDebugUtilsMessageTypeFlagsEXT.PERFORMANCE_EXT
+        }
+
+        createInfo.apply {
+            pApplicationInfo = appInfo.ptr()
+            enabledExtensions(cStrExtensions)
+            enabledLayers(cStrLayers)
+            pNext = debugCreateInfo.ptr()
+        }
+
+        blackhole.consume(appInfo.segment.address())
+        blackhole.consume(debugCreateInfo.segment.address())
+        blackhole.consume(createInfo.segment.address())
+    }
+}
 
 fun caelumCreateVkInstance(blackhole: Blackhole) = MemoryStack {
-    val layers = setOf("VK_LAYER_KHRONOS_validation")
-    val extensions = setOf("VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_utils")
-
     val appInfo = VkApplicationInfo.allocate {
         pApplicationName = "Hello Vulkan".c_str()
         applicationVersion = VkApiVersion(0u, 1u, 0u, 0u).value
@@ -70,9 +123,6 @@ fun caelumCreateVkDevice(blackhole: Blackhole) = MemoryStack {
     val width = 800
     val height = 600
     val window = glfwCreateWindow(width, height, "Vulkan".c_str(), nullptr(), nullptr())
-
-    val layers = setOf("VK_LAYER_KHRONOS_validation")
-    val extensions = setOf("VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_utils")
 
     val appInfo = VkApplicationInfo.allocate {
         pApplicationName = "Hello Vulkan".c_str()
