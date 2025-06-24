@@ -35,7 +35,7 @@ fun VkPhysicalDevice.querySwapchainSupport(surface: VkSurfaceKHR): SwapchainSupp
 
     val formatCount = NUInt32.malloc()
     getPhysicalDeviceSurfaceFormatsKHR(surface, formatCount.ptr(), null)
-    val formatsBuffer = VkSurfaceFormatKHR.allocate(formatCount.value)
+    val formatsBuffer = VkSurfaceFormatKHR.allocate(formatCount.value.toLong())
     getPhysicalDeviceSurfaceFormatsKHR(surface, formatCount.ptr(), formatsBuffer.ptr())
     val formats = buildList {
         repeat(formatCount.value.toInt()) {
@@ -45,7 +45,7 @@ fun VkPhysicalDevice.querySwapchainSupport(surface: VkSurfaceKHR): SwapchainSupp
 
     val presentModeCount = NUInt32.malloc()
     getPhysicalDeviceSurfacePresentModesKHR(surface, presentModeCount.ptr(), null)
-    val presentModesBuffer = VkPresentModeKHR.malloc(presentModeCount.value)
+    val presentModesBuffer = VkPresentModeKHR.malloc(presentModeCount.value.toLong())
     getPhysicalDeviceSurfacePresentModesKHR(surface, presentModeCount.ptr(), presentModesBuffer.ptr())
     val presentModes = buildList {
         repeat(presentModeCount.value.toInt()) {
@@ -142,7 +142,7 @@ context(_: MemoryStack)
 @OptIn(UnsafeAPI::class)
 fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
     MemoryStack {
-        val codeBuffer = NInt8.malloc(code.size)
+        val codeBuffer = NInt8.malloc(code.size.toLong())
         codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
         val createInfo = VkShaderModuleCreateInfo.allocate {
             codeSize = code.size.toLong()
@@ -158,7 +158,7 @@ fun VkPhysicalDevice.chooseGraphicsQueue(surface: VkSurfaceKHR): Int {
     MemoryStack {
         val queueFamilyPropertyCount = NUInt32.calloc()
         this@chooseGraphicsQueue.getPhysicalDeviceQueueFamilyProperties(queueFamilyPropertyCount.ptr(), null)
-        val queueFamilyProperties = VkQueueFamilyProperties.allocate(queueFamilyPropertyCount.value)
+        val queueFamilyProperties = VkQueueFamilyProperties.allocate(queueFamilyPropertyCount.value.toLong())
         this@chooseGraphicsQueue.getPhysicalDeviceQueueFamilyProperties(
             queueFamilyPropertyCount.ptr(),
             queueFamilyProperties.ptr()

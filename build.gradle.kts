@@ -15,6 +15,7 @@ plugins {
     id("dev.luna5ama.jar-optimizer") version "1.2.2"
     id("me.champeau.jmh") version "0.7.3"
 }
+
 jmh {
     includes.add("VkCreateInfo")
     jvmArgs.set(listOf("-Dfile.encoding=UTF-8", "--enable-native-access=ALL-UNNAMED"))
@@ -45,14 +46,14 @@ dependencies {
 java {
     withSourcesJar()
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(23))
+        languageVersion.set(JavaLanguageVersion.of(24))
     }
 }
 
 kotlin {
     compilerOptions {
         optIn.add("kotlin.contracts.ExperimentalContracts")
-        freeCompilerArgs.addAll("-Xbackend-threads=0", "-Xcontext-parameters")
+        freeCompilerArgs.addAll("-Xcontext-parameters")
     }
 }
 

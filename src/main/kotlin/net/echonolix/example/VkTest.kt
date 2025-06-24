@@ -148,7 +148,7 @@ fun main() {
         device.getSwapchainImagesKHR(swapchain, swapchainImageCount.ptr(), null)
         println("Swapchain image count: ${swapchainImageCount.value}")
         val swapchainImages = buildList {
-            val buffer = VkImage.malloc(swapchainImageCount.value)
+            val buffer = VkImage.malloc(swapchainImageCount.value.toLong())
             device.getSwapchainImagesKHR(swapchain, swapchainImageCount.ptr(), buffer.ptr())
             repeat(swapchainImageCount.value.toInt()) {
                 add(VkImage.fromNativeData(device, buffer[it]))
