@@ -4,7 +4,6 @@ import org.lwjgl.PointerBuffer
 import org.lwjgl.glfw.GLFW.*
 import org.lwjgl.glfw.GLFWVulkan.glfwCreateWindowSurface
 import org.lwjgl.system.MemoryStack
-import org.lwjgl.system.MemoryUtil
 import org.lwjgl.vulkan.*
 import org.lwjgl.vulkan.EXTDebugUtils.*
 import org.lwjgl.vulkan.KHRSurface.vkDestroySurfaceKHR
@@ -13,13 +12,10 @@ import org.openjdk.jmh.infra.Blackhole
 
 private val layers = setOf("VK_LAYER_KHRONOS_validation")
 private val extensions = setOf("VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_utils")
-private val cStrHelloVk = MemoryUtil.memUTF8("Hello Vulkan")
-private val cStrVkTest = MemoryUtil.memUTF8("VK Test")
-private val cStrExtensions = asPointerBuffer(extensions)
-private val cStrLayers = asPointerBuffer(layers)
 
 fun main() {
-    val blackhole = Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.")
+    val blackhole =
+        Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.")
     repeat(10) {
         repeat(1_000_000_000) {
             LWJGLCreateInfo.run(blackhole)
@@ -27,31 +23,23 @@ fun main() {
     }
 }
 
-private fun asPointerBuffer(collection: Collection<String>): PointerBuffer {
-    val buffer = MemoryUtil.memAllocPointer(collection.size)
-    collection.forEach { buffer.put(MemoryUtil.memUTF8(it)) }
-    return buffer.rewind()
-}
-
 private fun MemoryStack.asPointerBuffer(collection: Collection<String>): PointerBuffer {
     val buffer = mallocPointer(collection.size)
     collection.forEach { buffer.put(UTF8(it)) }
     return buffer.rewind()
 }
-object LWJGLCreateInfo {
-    val appInfo = VkApplicationInfo.calloc()
-    val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc()
-    val createInfo = VkInstanceCreateInfo.calloc()
 
+object LWJGLCreateInfo {
     fun run(blackhole: Blackhole) = MemoryStack.stackPush().use { stack ->
-        appInfo
+        val appInfo = VkApplicationInfo.calloc(stack)
             .sType(VK_STRUCTURE_TYPE_APPLICATION_INFO)
-            .pApplicationName(cStrHelloVk)
+            .pApplicationName(stack.UTF8("Hello Vulkan"))
             .applicationVersion(VK_API_VERSION_1_0)
-            .pEngineName(cStrVkTest)
+            .pEngineName(stack.UTF8("VK Test"))
             .engineVersion(VK_API_VERSION_1_0)
             .apiVersion(VK_API_VERSION_1_0)
-        debugCreateInfo
+
+        val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc(stack)
             .sType(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT)
             .messageSeverity(
                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT or
@@ -63,11 +51,12 @@ object LWJGLCreateInfo {
                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT or
                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
             )
-        createInfo
+
+        val createInfo = VkInstanceCreateInfo.calloc(stack)
             .sType(VK_STRUCTURE_TYPE_APPLICATION_INFO)
             .pApplicationInfo(appInfo)
-            .ppEnabledExtensionNames(cStrExtensions)
-            .ppEnabledLayerNames(cStrLayers)
+            .ppEnabledExtensionNames(stack.asPointerBuffer(extensions))
+            .ppEnabledLayerNames(stack.asPointerBuffer(layers))
             .pNext(debugCreateInfo)
 
         blackhole.consume(appInfo.address())
@@ -100,10 +89,8 @@ fun lwjglCreateVkInstance(blackhole: Blackhole) = MemoryStack.stackPush().use { 
         .pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
             val callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData)
             if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT and messageSeverity != 0) {
-//                System.err.println("Validation layer: " + callbackData.pMessageString())
                 blackhole.consume(callbackData.pMessageString())
             } else {
-//                println("Validation layer: " + callbackData.pMessageString())
                 blackhole.consume(callbackData.pMessageString())
             }
             VK_FALSE
@@ -156,10 +143,8 @@ fun lwjglCreateVkDevice(blackhole: Blackhole) = MemoryStack.stackPush().use { st
         .pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
             val callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData)
             if (VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT and messageSeverity != 0) {
-//                System.err.println("Validation layer: " + callbackData.pMessageString())
                 blackhole.consume(callbackData.pMessageString())
             } else {
-//                println("Validation layer: " + callbackData.pMessageString())
                 blackhole.consume(callbackData.pMessageString())
             }
             VK_FALSE

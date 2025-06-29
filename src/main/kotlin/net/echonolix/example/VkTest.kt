@@ -13,6 +13,7 @@ import net.echonolix.caelum.vulkan.handles.*
 import net.echonolix.caelum.vulkan.structs.*
 import net.echonolix.caelum.vulkan.unions.*
 import net.echonolix.example.utils.AverageCounter
+import java.lang.foreign.Arena
 
 class VkTestS
 

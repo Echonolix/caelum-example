@@ -14,6 +14,7 @@ import net.echonolix.caelum.vulkan.flags.VkQueueFlags
 import net.echonolix.caelum.vulkan.handles.*
 import net.echonolix.caelum.vulkan.structs.*
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 
@@ -143,7 +144,7 @@ context(_: MemoryStack)
 fun VkDevice.makeShaderModule(code: ByteArray): VkShaderModule {
     MemoryStack {
         val codeBuffer = NInt8.malloc(code.size.toLong())
-        codeBuffer.segment.copyFrom(MemorySegment.ofArray(code))
+        MemorySegment.copy(code, 0, APIHelper.`_$OMNI_SEGMENT$_`, NInt8.layout, codeBuffer._address, code.size)
         val createInfo = VkShaderModuleCreateInfo.allocate {
             codeSize = code.size.toLong()
             pCode = reinterpret_cast(codeBuffer.ptr())

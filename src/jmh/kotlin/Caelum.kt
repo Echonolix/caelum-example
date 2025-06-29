@@ -1,33 +1,26 @@
 package net.echonolix.example
 
 import net.echonolix.caelum.*
-import net.echonolix.caelum.glfw.consts.GLFW_CLIENT_API
-import net.echonolix.caelum.glfw.consts.GLFW_FALSE
-import net.echonolix.caelum.glfw.consts.GLFW_NO_API
-import net.echonolix.caelum.glfw.consts.GLFW_RESIZABLE
-import net.echonolix.caelum.glfw.consts.GLFW_VISIBLE
+import net.echonolix.caelum.c_str
+import net.echonolix.caelum.c_strs
+import net.echonolix.caelum.glfw.consts.*
 import net.echonolix.caelum.glfw.functions.*
 import net.echonolix.caelum.vulkan.*
-import net.echonolix.caelum.vulkan.Vk
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageSeverityFlagsEXT
 import net.echonolix.caelum.vulkan.flags.VkDebugUtilsMessageTypeFlagsEXT
 import net.echonolix.caelum.vulkan.handles.VkPhysicalDevice
 import net.echonolix.caelum.vulkan.handles.get
 import net.echonolix.caelum.vulkan.structs.*
-import net.echonolix.caelum.vulkan.structs.allocate
 import org.openjdk.jmh.infra.Blackhole
-import java.lang.foreign.Arena
+import kotlin.io.path.Path
 
 private val layers = setOf("VK_LAYER_KHRONOS_validation")
 private val extensions = setOf("VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_utils")
-private val arena = Arena.ofAuto()
-private val cStrHelloVk = "Hello Vulkan".c_str(arena)
-private val cStrVkTest = "VK Test".c_str(arena)
-private val cStrExtensions = extensions.c_strs(arena)
-private val cStrLayers = layers.c_strs(arena)
 
 fun main() {
-    val blackhole = Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.")
+    System.load(Path("run/glfw3.dll").toAbsolutePath().toString())
+    val blackhole =
+        Blackhole("Today's password is swordfish. I understand instantiating Blackholes directly is dangerous.")
     repeat(10) {
         repeat(1_000_000_000) {
             CaelumCreateInfo.run(blackhole)
@@ -36,20 +29,16 @@ fun main() {
 }
 
 object CaelumCreateInfo {
-    val appInfo = VkApplicationInfo.allocate(arena)
-    val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.allocate(arena)
-    val createInfo = VkInstanceCreateInfo.allocate(arena)
-
     fun run(blackhole: Blackhole) = MemoryStack {
-        appInfo.apply {
-            pApplicationName = cStrHelloVk
+        val appInfo = VkApplicationInfo.allocate {
+            pApplicationName = "Hello Vulkan".c_str()
             applicationVersion = VkApiVersion(0u, 1u, 0u, 0u).value
-            pEngineName = cStrVkTest
+            pEngineName = "VK Test".c_str()
             engineVersion = VkApiVersion(0u, 1u, 0u, 0u).value
             apiVersion = VK_API_VERSION_1_0.value
         }
 
-        debugCreateInfo.apply {
+        val debugCreateInfo = VkDebugUtilsMessengerCreateInfoEXT.allocate {
             messageSeverity = VkDebugUtilsMessageSeverityFlagsEXT.VERBOSE_EXT +
                 VkDebugUtilsMessageSeverityFlagsEXT.WARNING_EXT +
                 VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT
@@ -59,16 +48,16 @@ object CaelumCreateInfo {
                 VkDebugUtilsMessageTypeFlagsEXT.PERFORMANCE_EXT
         }
 
-        createInfo.apply {
+        val createInfo = VkInstanceCreateInfo.allocate {
             pApplicationInfo = appInfo.ptr()
-            enabledExtensions(cStrExtensions)
-            enabledLayers(cStrLayers)
+            enabledExtensions(extensions.c_strs())
+            enabledLayers(layers.c_strs())
             pNext = debugCreateInfo.ptr()
         }
 
-        blackhole.consume(appInfo.segment.address())
-        blackhole.consume(debugCreateInfo.segment.address())
-        blackhole.consume(createInfo.segment.address())
+        blackhole.consume(appInfo._address)
+        blackhole.consume(debugCreateInfo._address)
+        blackhole.consume(createInfo._address)
     }
 }
 
@@ -92,10 +81,8 @@ fun caelumCreateVkInstance(blackhole: Blackhole) = MemoryStack {
 
         pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
             if (VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT in messageSeverity) {
-//                System.err.println("Validation layer: " + pCallbackData.pMessage.string)
                 blackhole.consume(pCallbackData.pMessage.string)
             } else {
-//                println("Validation layer: " + pCallbackData.pMessage.string)
                 blackhole.consume(pCallbackData.pMessage.string)
             }
             VK_FALSE
@@ -143,10 +130,8 @@ fun caelumCreateVkDevice(blackhole: Blackhole) = MemoryStack {
 
         pfnUserCallback { messageSeverity, messageType, pCallbackData, pUserData ->
             if (VkDebugUtilsMessageSeverityFlagsEXT.ERROR_EXT in messageSeverity) {
-//                System.err.println("Validation layer: " + pCallbackData.pMessage.string)
                 blackhole.consume(pCallbackData.pMessage.string)
             } else {
-//                println("Validation layer: " + pCallbackData.pMessage.string)
                 blackhole.consume(pCallbackData.pMessage.string)
             }
             VK_FALSE

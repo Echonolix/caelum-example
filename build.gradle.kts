@@ -17,8 +17,13 @@ plugins {
 }
 
 jmh {
-    includes.add("VkCreateInfo")
-    jvmArgs.set(listOf("-Dfile.encoding=UTF-8", "--enable-native-access=ALL-UNNAMED"))
+    jvmArgs.set(listOf(
+        "-Dfile.encoding=UTF-8",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dorg.lwjgl.util.NoChecks=true",
+        "-Dorg.lwjgl.util.NoFunctionChecks=true",
+        "-Dorg.lwjgl.util.NoHashChecks=true",
+    ))
     javaToolchains {
         jvm.set(launcherFor {
             languageVersion.set(JavaLanguageVersion.of(24))
