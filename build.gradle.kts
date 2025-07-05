@@ -64,7 +64,7 @@ kotlin {
 
 slang {
     compilerOptions {
-        debug.set(true)
+        debugLogging.set(true)
         extraOptions.add("-fvk-use-entrypoint-name")
     }
 }
